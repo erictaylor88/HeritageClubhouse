@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
+import { CourseSearch } from "@/components/course-search";
+import { CourseList } from "@/components/course-list";
+import { type CourseEntry, type CourseStatus } from "@/lib/courses";
 
 async function signOut() {
   "use server";
@@ -8,6 +11,22 @@ async function signOut() {
   await supabase.auth.signOut();
   redirect("/login");
 }
+
+type EntryRow = {
+  id: string;
+  status: string;
+  date_played: string | null;
+  best_score: number | null;
+  notes: string | null;
+  course_cache: {
+    course_id: string;
+    club_name: string | null;
+    course_name: string | null;
+    address: string | null;
+    lat: number;
+    lng: number;
+  } | null;
+};
 
 export default async function MapPage() {
   const supabase = await createClient();
@@ -18,13 +37,41 @@ export default async function MapPage() {
   // Proxy already gates this route; this is defense-in-depth.
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("username, display_name")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [{ data: profile }, { data: entryRows }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("username, display_name")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("course_entries")
+      .select(
+        "id, status, date_played, best_score, notes, course_cache(course_id, club_name, course_name, address, lat, lng)",
+      )
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false }),
+  ]);
 
   const name = profile?.display_name ?? user.email ?? "there";
+
+  // Shape rows into the UI type, dropping any orphaned-cache rows defensively.
+  const entries: CourseEntry[] = ((entryRows ?? []) as unknown as EntryRow[])
+    .filter((row) => row.course_cache !== null)
+    .map((row) => ({
+      id: row.id,
+      status: row.status as CourseStatus,
+      datePlayed: row.date_played,
+      bestScore: row.best_score,
+      notes: row.notes,
+      course: {
+        courseId: row.course_cache!.course_id,
+        clubName: row.course_cache!.club_name,
+        courseName: row.course_cache!.course_name,
+        address: row.course_cache!.address,
+        lat: row.course_cache!.lat,
+        lng: row.course_cache!.lng,
+      },
+    }));
 
   return (
     <div className="flex flex-1 flex-col">
@@ -40,35 +87,48 @@ export default async function MapPage() {
         </form>
       </header>
 
-      {/* Empty map canvas placeholder (the real Leaflet map lands in P1) */}
-      <main className="relative flex flex-1 items-center justify-center bg-[var(--paper-sunk)] px-6">
-        <div className="max-w-md text-center">
-          <p className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.16em] text-[var(--ink-muted)]">
-            Welcome, {name}
-          </p>
-          <h1 className="mt-3 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-[var(--ink)]">
-            Your map is empty — for now
-          </h1>
-          <p className="mt-3 text-[var(--ink-muted)]">
-            Course search and your first stamps arrive next. This is your signed-in
-            home base.
-          </p>
-          <div className="mx-auto mt-6 flex items-center justify-center gap-5 text-sm text-[var(--ink-muted)]">
-            <span className="flex items-center gap-2">
-              <span className="size-2.5 rounded-full bg-[var(--status-played)]" />
-              Played
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="size-2.5 rounded-full bg-[var(--status-upcoming)]" />
-              Upcoming
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="size-2.5 rounded-full bg-[var(--status-bucket)]" />
-              Bucket list
-            </span>
+      <div className="flex flex-1 flex-col md:flex-row">
+        {/* Logbook panel: search + your courses */}
+        <aside className="flex w-full flex-col gap-6 border-b border-[var(--line)] bg-[var(--paper)] p-5 md:w-[360px] md:shrink-0 md:overflow-y-auto md:border-b-0 md:border-r">
+          <div>
+            <p className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.16em] text-[var(--ink-muted)]">
+              Welcome, {name}
+            </p>
+            <h1 className="mt-1 font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-[var(--ink)]">
+              Add a course
+            </h1>
           </div>
-        </div>
-      </main>
+
+          <CourseSearch />
+
+          <div className="flex flex-col gap-3 border-t border-[var(--line)] pt-5">
+            <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-[var(--forest)]">
+              Your courses
+              {entries.length > 0 && (
+                <span className="ml-2 font-[family-name:var(--font-mono)] text-xs font-normal text-[var(--ink-muted)]">
+                  {entries.length}
+                </span>
+              )}
+            </h2>
+            <CourseList entries={entries} />
+          </div>
+        </aside>
+
+        {/* Map canvas placeholder — Leaflet lands in the next P1 task. */}
+        <main className="relative flex flex-1 items-center justify-center bg-[var(--paper-sunk)] px-6 py-16">
+          <div className="max-w-md text-center">
+            <h2 className="font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-[var(--ink)]">
+              {entries.length > 0
+                ? `${entries.length} ${entries.length === 1 ? "course" : "courses"} logged`
+                : "Your map is empty — for now"}
+            </h2>
+            <p className="mt-3 text-[var(--ink-muted)]">
+              The interactive map with status-colored stamp pins arrives next.
+              Courses you add show up in the panel for now.
+            </p>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
