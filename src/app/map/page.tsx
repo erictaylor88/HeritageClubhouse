@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { CourseSearch } from "@/components/course-search";
 import { CourseList } from "@/components/course-list";
+import { MapCanvas } from "@/components/map-canvas";
 import { type CourseEntry, type CourseStatus } from "@/lib/courses";
 
 async function signOut() {
@@ -87,7 +88,7 @@ export default async function MapPage() {
         </form>
       </header>
 
-      <div className="flex flex-1 flex-col md:flex-row">
+      <div className="flex flex-1 flex-col md:h-[calc(100dvh-3.5rem)] md:flex-row md:overflow-hidden">
         {/* Logbook panel: search + your courses */}
         <aside className="flex w-full flex-col gap-6 border-b border-[var(--line)] bg-[var(--paper)] p-5 md:w-[360px] md:shrink-0 md:overflow-y-auto md:border-b-0 md:border-r">
           <div>
@@ -114,19 +115,9 @@ export default async function MapPage() {
           </div>
         </aside>
 
-        {/* Map canvas placeholder — Leaflet lands in the next P1 task. */}
-        <main className="relative flex flex-1 items-center justify-center bg-[var(--paper-sunk)] px-6 py-16">
-          <div className="max-w-md text-center">
-            <h2 className="font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-[var(--ink)]">
-              {entries.length > 0
-                ? `${entries.length} ${entries.length === 1 ? "course" : "courses"} logged`
-                : "Your map is empty — for now"}
-            </h2>
-            <p className="mt-3 text-[var(--ink-muted)]">
-              The interactive map with status-colored stamp pins arrives next.
-              Courses you add show up in the panel for now.
-            </p>
-          </div>
+        {/* Interactive map with status-colored stamp pins. */}
+        <main className="relative h-[60vh] w-full md:h-auto md:flex-1">
+          <MapCanvas entries={entries} />
         </main>
       </div>
     </div>

@@ -118,3 +118,47 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
 }
+
+/* ---------------------------------------------------------------------------
+   Leaflet / map — Logbook overrides + status-colored stamp pins.
+--------------------------------------------------------------------------- */
+.leaflet-container {
+  background: var(--paper-sunk);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Passport-stamp pin: colored ink dot, paper-ring, soft shadow. */
+.hc-stamp-dot {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: var(--c);
+  border: 2.5px solid var(--surface);
+  box-shadow:
+    0 0 0 1.5px var(--c),
+    0 1px 4px rgba(32, 36, 30, 0.4);
+  transition: transform 0.12s ease;
+}
+.leaflet-marker-icon:hover .hc-stamp-dot {
+  transform: scale(1.18);
+}
+
+/* Popup chrome tuned to the paper palette. */
+.leaflet-popup-content-wrapper {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 20px rgba(32, 36, 30, 0.18);
+}
+.leaflet-popup-tip {
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.leaflet-popup-content {
+  margin: 0.75rem 0.875rem;
+}
+.leaflet-container a.leaflet-popup-close-button {
+  color: var(--ink-muted);
+}
