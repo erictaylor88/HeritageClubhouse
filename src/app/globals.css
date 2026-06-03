@@ -1,0 +1,120 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+   Heritage Clubhouse — The Logbook tokens (core subset for P0 shell).
+   Full design-system application happens during P1 UI work.
+--------------------------------------------------------------------------- */
+:root {
+  /* Paper & ink */
+  --paper: #faf6ec;
+  --paper-sunk: #f1e9d6;
+  --surface: #fffdf7;
+  --ink: #20241e;
+  --ink-muted: #5c5848;
+  --line: #d9cfb8;
+  /* Brand */
+  --forest: #1f4d2e;
+  --forest-mid: #2e6b40;
+  --brass: #b08d4f;
+  --brass-bright: #c9a86a;
+  --brass-deep: #8a6d3b;
+  --oxblood: #6e2a28;
+  /* Status */
+  --status-played: #2e6b40;
+  --status-upcoming: #c9883a;
+  --status-bucket: #5b7b8a;
+
+  --radius: 0.5rem;
+
+  /* shadcn semantic aliases mapped onto the Logbook palette */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--forest);
+  --primary-foreground: var(--paper);
+  --secondary: var(--paper-sunk);
+  --secondary-foreground: var(--ink);
+  --muted: var(--paper-sunk);
+  --muted-foreground: var(--ink-muted);
+  --accent: var(--brass-bright);
+  --accent-foreground: var(--ink);
+  --destructive: var(--oxblood);
+  --destructive-foreground: var(--paper);
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--brass-bright);
+}
+
+.dark {
+  --paper: #1a1611;
+  --paper-sunk: #13100c;
+  --surface: #2a2218;
+  --ink: #ede6d4;
+  --ink-muted: #a89f88;
+  --line: #3c3327;
+  --forest-mid: #4e9a63;
+  --brass-bright: #c9a86a;
+  --oxblood: #a84a40;
+
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--forest-mid);
+  --primary-foreground: var(--paper);
+  --secondary: var(--paper-sunk);
+  --secondary-foreground: var(--ink);
+  --muted: var(--paper-sunk);
+  --muted-foreground: var(--ink-muted);
+  --accent: var(--brass-bright);
+  --accent-foreground: var(--ink);
+  --destructive: var(--oxblood);
+  --destructive-foreground: var(--paper);
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--brass-bright);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+
+  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-courier-prime);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
