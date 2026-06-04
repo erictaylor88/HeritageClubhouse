@@ -139,8 +139,9 @@ function sanitizeEntryFields(
 /**
  * Update the editable fields (date played / best score / notes) on one of the
  * signed-in user's entries. RLS enforces ownership; the explicit `user_id`
- * filter is defense-in-depth, and we bump `updated_at` ourselves since there's
- * no DB trigger for it.
+ * filter is defense-in-depth. `updated_at` is bumped by the
+ * `course_entries_set_updated_at` BEFORE UPDATE trigger (migration 002), so we
+ * don't set it here.
  */
 export async function updateCourseEntry(
   entryId: string,
@@ -163,7 +164,6 @@ export async function updateCourseEntry(
       date_played: datePlayed,
       best_score: bestScore,
       notes,
-      updated_at: new Date().toISOString(),
     })
     .eq("id", entryId)
     .eq("user_id", user.id); // defense-in-depth; RLS already enforces ownership
