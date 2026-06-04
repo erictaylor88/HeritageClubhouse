@@ -86,6 +86,94 @@ export async function addCourseEntry(
   return { ok: true };
 }
 
+/** Editable per-entry fields. Coordinates/status are handled elsewhere. */
+export type EntryEditFields = {
+  datePlayed: string | null;
+  bestScore: number | null;
+  notes: string | null;
+};
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_NOTES = 2000;
+
+/** Normalize + validate the editable fields, or return an error string. */
+function sanitizeEntryFields(
+  fields: EntryEditFields,
+): { ok: true; value: EntryEditFields } | { ok: false; error: string } {
+  // Date played: null, or a real YYYY-MM-DD that isn't in the future.
+  let datePlayed: string | null = null;
+  if (fields.datePlayed) {
+    const raw = fields.datePlayed.trim();
+    if (!ISO_DATE.test(raw)) return { ok: false, error: "Invalid date." };
+    const parsed = new Date(`${raw}T00:00:00Z`);
+    if (Number.isNaN(parsed.getTime()))
+      return { ok: false, error: "Invalid date." };
+    // Compare against today's UTC date; a "played" date can't be in the future.
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    if (raw > todayUtc)
+      return { ok: false, error: "Date played can't be in the future." };
+    datePlayed = raw;
+  }
+
+  // Best score: null, or an integer in a sane golf range.
+  let bestScore: number | null = null;
+  if (fields.bestScore !== null && fields.bestScore !== undefined) {
+    const n = Number(fields.bestScore);
+    if (!Number.isInteger(n) || n < 1 || n > 300)
+      return { ok: false, error: "Best score must be a whole number (1–300)." };
+    bestScore = n;
+  }
+
+  // Notes: trim, cap length, collapse empty to null.
+  let notes: string | null = null;
+  if (typeof fields.notes === "string") {
+    const trimmed = fields.notes.trim();
+    if (trimmed.length > MAX_NOTES)
+      return { ok: false, error: `Notes must be ${MAX_NOTES} characters or fewer.` };
+    notes = trimmed.length > 0 ? trimmed : null;
+  }
+
+  return { ok: true, value: { datePlayed, bestScore, notes } };
+}
+
+/**
+ * Update the editable fields (date played / best score / notes) on one of the
+ * signed-in user's entries. RLS enforces ownership; the explicit `user_id`
+ * filter is defense-in-depth, and we bump `updated_at` ourselves since there's
+ * no DB trigger for it.
+ */
+export async function updateCourseEntry(
+  entryId: string,
+  fields: EntryEditFields,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "You're not signed in." };
+  if (!entryId) return { ok: false, error: "Missing entry." };
+
+  const sanitized = sanitizeEntryFields(fields);
+  if (!sanitized.ok) return sanitized;
+  const { datePlayed, bestScore, notes } = sanitized.value;
+
+  const { error } = await supabase
+    .from("course_entries")
+    .update({
+      date_played: datePlayed,
+      best_score: bestScore,
+      notes,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", entryId)
+    .eq("user_id", user.id); // defense-in-depth; RLS already enforces ownership
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/map");
+  return { ok: true };
+}
+
 /** Remove one of the signed-in user's course entries. */
 export async function removeCourseEntry(entryId: string): Promise<ActionResult> {
   const supabase = await createClient();

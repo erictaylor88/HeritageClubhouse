@@ -26,6 +26,16 @@
   --status-played: #2e6b40;
   --status-upcoming: #c9883a;
   --status-bucket: #5b7b8a;
+  /* Semantic */
+  --success: #2e6b40;
+  --warning: #c9883a;
+  --error: #8a2b26;
+  --info: #5b7b8a;
+
+  /* Warm shadows — never pure black (design spec §6.1) */
+  --shadow-sm: 0 1px 2px rgba(40, 30, 10, 0.08);
+  --shadow-md: 0 4px 14px rgba(40, 30, 10, 0.1);
+  --shadow-lg: 0 12px 32px rgba(40, 30, 10, 0.14);
 
   --radius: 0.5rem;
 
@@ -61,6 +71,10 @@
   --forest-mid: #4e9a63;
   --brass-bright: #c9a86a;
   --oxblood: #a84a40;
+  /* Status — brightened for leather (design spec §3.3) */
+  --status-played: #4e9a63;
+  --status-upcoming: #e0a24e;
+  --status-bucket: #7fa0b0;
 
   --background: var(--paper);
   --foreground: var(--ink);
@@ -120,6 +134,23 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
+   Paper grain — ≤4% grayscale noise on paper surfaces only, NEVER the map
+   (design spec §6.1). Layered as a background-image so it coexists with the
+   element's background-color.
+--------------------------------------------------------------------------- */
+.hc-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
+/* Brass hairline rule for separating hero sections (design spec §6.1). */
+.hc-rule {
+  height: 1px;
+  border: 0;
+  background: color-mix(in srgb, var(--brass-bright) 50%, transparent);
+}
+
+/* ---------------------------------------------------------------------------
    Leaflet / map — Logbook overrides + status-colored stamp pins.
 --------------------------------------------------------------------------- */
 .leaflet-container {
@@ -127,21 +158,83 @@ body {
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Passport-stamp pin: colored ink dot, paper-ring, soft shadow. */
-.hc-stamp-dot {
-  display: block;
-  width: 18px;
-  height: 18px;
-  border-radius: 9999px;
-  background: var(--c);
-  border: 2.5px solid var(--surface);
-  box-shadow:
-    0 0 0 1.5px var(--c),
-    0 1px 4px rgba(32, 36, 30, 0.4);
-  transition: transform 0.12s ease;
+/* Passport-stamp pin (design spec §6.3 / §8.1): a near-circular badge with a
+   status-colored ring whose STYLE encodes status (solid = played, dashed =
+   upcoming, dotted = bucket — redundant with color per §9), a paper fill, and
+   a monogram inked in the status color. `--c` and `--ring-style` are passed
+   inline per marker. */
+.hc-stamp {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.leaflet-marker-icon:hover .hc-stamp-dot {
-  transform: scale(1.18);
+.hc-stamp-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  background: var(--surface);
+  color: var(--c);
+  border: 2.5px var(--ring-style, solid) var(--c);
+  box-shadow: var(--shadow-md);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  transition:
+    transform 0.16s cubic-bezier(0.2, 0, 0.2, 1),
+    box-shadow 0.16s cubic-bezier(0.2, 0, 0.2, 1);
+  animation: hc-stamp-in 0.22s cubic-bezier(0.2, 0, 0.2, 1);
+}
+/* Stamp "press" on appearance — the one expressive flourish (§6.4). */
+@keyframes hc-stamp-in {
+  from {
+    transform: scale(1.15);
+    opacity: 0.4;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.leaflet-marker-icon:hover .hc-stamp-badge {
+  transform: scale(1.08);
+  box-shadow: var(--shadow-lg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hc-stamp-badge {
+    animation: none;
+    transition: none;
+  }
+  .leaflet-marker-icon:hover .hc-stamp-badge {
+    transform: none;
+  }
+}
+
+/* Leaflet zoom controls tuned to the paper-and-brass palette. */
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  background: var(--surface);
+  color: var(--ink);
+  border-bottom-color: var(--line);
+}
+.leaflet-bar a:hover {
+  background: var(--paper-sunk);
+  color: var(--brass-deep);
+}
+.leaflet-bar {
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-md);
+}
+.leaflet-control-attribution {
+  background: color-mix(in srgb, var(--surface) 88%, transparent) !important;
+  color: var(--ink-muted);
+}
+.leaflet-control-attribution a {
+  color: var(--brass-deep);
 }
 
 /* Popup chrome tuned to the paper palette. */

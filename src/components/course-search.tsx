@@ -11,6 +11,7 @@ import {
   type CourseSearchResult,
   type CourseStatus,
 } from "@/lib/courses";
+import { StatusSwatch } from "@/components/status-chip";
 
 const MIN_QUERY_LENGTH = 3;
 const DEBOUNCE_MS = 350;
@@ -125,7 +126,7 @@ export function CourseSearch() {
               key={course.courseId}
               className="rounded-md border border-[var(--line)] bg-[var(--surface)] p-3"
             >
-              <p className="font-medium text-[var(--ink)]">
+              <p className="font-[family-name:var(--font-display)] text-[17px] font-medium leading-snug text-[var(--ink)]">
                 {courseTitle(course)}
               </p>
               {course.address && (
@@ -147,14 +148,9 @@ export function CourseSearch() {
                       type="button"
                       disabled={adding !== null}
                       onClick={() => handleAdd(course, status)}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1 text-xs text-[var(--ink)] transition-colors hover:border-[var(--brass)] hover:bg-[var(--paper-sunk)] disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] transition-colors hover:border-[var(--brass)] hover:bg-[var(--paper-sunk)] disabled:opacity-50"
                     >
-                      <span
-                        className="size-2 rounded-full"
-                        style={{
-                          backgroundColor: `var(${STATUS_META[status].cssVar})`,
-                        }}
-                      />
+                      <StatusSwatch status={status} className="size-2" />
                       {busy ? "Adding…" : STATUS_META[status].label}
                     </button>
                   );

@@ -6,10 +6,12 @@ import L from "leaflet";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import {
   STATUS_META,
+  courseMonogram,
   courseTitle,
   type CourseEntry,
   type CourseStatus,
 } from "@/lib/courses";
+import { StatusChip } from "@/components/status-chip";
 
 // Eric is in Irvine, CA — default the empty-map view over Orange County / SoCal.
 const DEFAULT_CENTER: [number, number] = [33.6846, -117.8265];
@@ -22,14 +24,23 @@ const STADIA_ATTRIBUTION =
   '&copy; <a href="https://openmaptiles.org/" target="_blank" rel="noreferrer">OpenMapTiles</a> ' +
   '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>';
 
-/** A passport-stamp divIcon colored by status (uses the global --status-* vars). */
-function stampIcon(status: CourseStatus): L.DivIcon {
+/**
+ * A passport-stamp divIcon: status-colored ring (style encodes status), paper
+ * fill, and the course monogram inked at center (design spec §6.3 / §8.1). The
+ * 44px container gives a comfortable hit area around the 34px badge (§9).
+ */
+function stampIcon(
+  status: CourseStatus,
+  monogram: string,
+  label: string,
+): L.DivIcon {
+  const { cssVar, ring } = STATUS_META[status];
   return L.divIcon({
     className: "hc-stamp",
-    html: `<span class="hc-stamp-dot" style="--c:var(${STATUS_META[status].cssVar})"></span>`,
-    iconSize: [18, 18],
-    iconAnchor: [9, 9],
-    popupAnchor: [0, -10],
+    html: `<span class="hc-stamp-badge" style="--c:var(${cssVar});--ring-style:${ring}" role="img" aria-label="${label}" title="${label}">${monogram}</span>`,
+    iconSize: [44, 44],
+    iconAnchor: [22, 22],
+    popupAnchor: [0, -20],
   });
 }
 
@@ -52,15 +63,25 @@ function FitToEntries({ entries }: { entries: CourseEntry[] }) {
 }
 
 export function CourseMap({ entries }: { entries: CourseEntry[] }) {
-  // Stable icon instances per status (avoid rebuilding on every render).
+  // One stamp icon per entry — the monogram varies, so memoize on the inputs
+  // that actually change the rendered badge.
   const icons = useMemo(
     () =>
-      ({
-        played: stampIcon("played"),
-        upcoming: stampIcon("upcoming"),
-        bucket_list: stampIcon("bucket_list"),
-      }) satisfies Record<CourseStatus, L.DivIcon>,
-    [],
+      new Map(
+        entries.map((e) => {
+          const meta = STATUS_META[e.status];
+          const title = courseTitle(e.course);
+          return [
+            e.id,
+            stampIcon(
+              e.status,
+              courseMonogram(e.course),
+              `${title}, ${meta.label}`,
+            ),
+          ] as const;
+        }),
+      ),
+    [entries],
   );
 
   return (
@@ -71,35 +92,35 @@ export function CourseMap({ entries }: { entries: CourseEntry[] }) {
       className="h-full w-full"
     >
       <TileLayer url={STADIA_TILE_URL} attribution={STADIA_ATTRIBUTION} />
-      {entries.map((entry) => (
-        <Marker
-          key={entry.id}
-          position={[entry.course.lat, entry.course.lng]}
-          icon={icons[entry.status]}
-        >
-          <Popup>
-            <div className="flex flex-col gap-1">
-              <span className="font-[family-name:var(--font-display)] text-sm font-semibold text-[var(--ink)]">
-                {courseTitle(entry.course)}
-              </span>
-              {entry.course.address && (
-                <span className="text-xs text-[var(--ink-muted)]">
-                  {entry.course.address}
+      {entries.map((entry) => {
+        const meta = STATUS_META[entry.status];
+        return (
+          <Marker
+            key={entry.id}
+            position={[entry.course.lat, entry.course.lng]}
+            icon={icons.get(entry.id)}
+          >
+            <Popup>
+              {/* Top-edge status-color rule (design spec §8.2). */}
+              <span
+                className="mb-2 block h-0.5 w-8 rounded-full"
+                style={{ backgroundColor: `var(${meta.cssVar})` }}
+              />
+              <div className="flex flex-col gap-1">
+                <span className="font-[family-name:var(--font-display)] text-base font-medium leading-snug text-[var(--ink)]">
+                  {courseTitle(entry.course)}
                 </span>
-              )}
-              <span className="mt-0.5 inline-flex items-center gap-1.5 text-xs text-[var(--ink)]">
-                <span
-                  className="size-2 rounded-full"
-                  style={{
-                    backgroundColor: `var(${STATUS_META[entry.status].cssVar})`,
-                  }}
-                />
-                {STATUS_META[entry.status].label}
-              </span>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
+                {entry.course.address && (
+                  <span className="text-xs text-[var(--ink-muted)]">
+                    {entry.course.address}
+                  </span>
+                )}
+                <StatusChip status={entry.status} className="mt-1" />
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
       <FitToEntries entries={entries} />
     </MapContainer>
   );

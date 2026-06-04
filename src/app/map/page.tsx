@@ -77,9 +77,12 @@ export default async function MapPage() {
   return (
     <div className="flex flex-1 flex-col">
       {/* Top bar */}
-      <header className="flex h-14 items-center justify-between border-b border-[var(--line)] bg-[var(--surface)] px-5">
-        <span className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-[var(--forest)]">
-          Heritage Clubhouse
+      <header className="hc-grain flex h-14 items-center justify-between border-b border-[var(--line)] bg-[var(--surface)] px-5">
+        <span className="flex flex-col">
+          <span className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-[var(--forest)]">
+            Heritage Clubhouse
+          </span>
+          <span className="hc-rule mt-0.5 w-full" />
         </span>
         <form action={signOut}>
           <Button type="submit" variant="ghost" size="sm">
@@ -90,7 +93,7 @@ export default async function MapPage() {
 
       <div className="flex flex-1 flex-col md:h-[calc(100dvh-3.5rem)] md:flex-row md:overflow-hidden">
         {/* Logbook panel: search + your courses */}
-        <aside className="flex w-full flex-col gap-6 border-b border-[var(--line)] bg-[var(--paper)] p-5 md:w-[360px] md:shrink-0 md:overflow-y-auto md:border-b-0 md:border-r">
+        <aside className="hc-grain flex w-full flex-col gap-6 border-b border-[var(--line)] bg-[var(--paper)] p-5 md:w-[360px] md:shrink-0 md:overflow-y-auto md:border-b-0 md:border-r">
           <div>
             <p className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.16em] text-[var(--ink-muted)]">
               Welcome, {name}
