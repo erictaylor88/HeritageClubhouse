@@ -76,9 +76,18 @@ Dashboard → **Authentication → Email Templates** → for each, replace the
 - Confirm signup → `Confirm your email — Heritage Clubhouse`
 - Magic Link → `Your Heritage Clubhouse sign-in link`
 
-Keep the `{{ .ConfirmationURL }}` token intact — Supabase substitutes the
-one-time link at send time. (Both also support `{{ .Token }}`, `{{ .SiteURL }}`,
-`{{ .Email }}`, `{{ .RedirectTo }}`.)
+**Both templates use the token_hash sign-in URL, not `{{ .ConfirmationURL }}`.**
+The link is `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type={{ .Type }}&next=/map`,
+which lands on [`src/app/auth/confirm/route.ts`](../src/app/auth/confirm/route.ts)
+and verifies the token server-side (`verifyOtp`). This is what makes a link
+clicked from the Gmail app on mobile work — unlike the old `{{ .ConfirmationURL }}`
+→ PKCE `?code=` flow, it does **not** need the `code_verifier` cookie from the
+browser that requested the link. Each template also renders `{{ .Token }}` — the
+6-digit code the user can type on the sign-in screen as a fallback. (Other
+available tokens: `{{ .SiteURL }}`, `{{ .Email }}`, `{{ .RedirectTo }}`.)
+
+> Re-paste both templates from `docs/email/*.html` whenever they change — the
+> dashboard copy is what actually sends; the repo files are the source of truth.
 
 > Tip: to see the branded Magic Link email yourself, you'd need to sign in as a
 > *returning* user — i.e. after your first (signup) login.
