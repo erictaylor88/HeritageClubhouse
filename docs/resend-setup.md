@@ -49,9 +49,12 @@ on that domain — e.g. `clubhouse@yourdomain` — and you can email anyone.)
 Dashboard → **Authentication → URL Configuration**. The magic link only redirects
 to allow-listed URLs; otherwise it falls back to the Site URL.
 
-- **Site URL:** `https://heritage-clubhouse.vercel.app`
-- **Redirect URLs** (add both):
-  - `https://heritage-clubhouse.vercel.app/**`
+- **Site URL:** `https://heritageclubhouse.app` once the custom domain is live on
+  Vercel (see [Going live](#going-live-real-sending)); until then keep
+  `https://heritage-clubhouse.vercel.app`.
+- **Redirect URLs** (add all that apply):
+  - `https://heritageclubhouse.app/**` (custom domain)
+  - `https://heritage-clubhouse.vercel.app/**` (Vercel default — keep as fallback)
   - `http://localhost:3000/**` (local dev)
 
 The app requests `emailRedirectTo = <origin>/auth/callback` (see
@@ -90,15 +93,34 @@ one-time link at send time. (Both also support `{{ .Token }}`, `{{ .SiteURL }}`,
 
 ---
 
-## Going live (real sending)
+## Going live (real sending) — `heritageclubhouse.app`
 
-Test mode can't email friends. When ready:
+**Decided:** the go-live sending domain is **`heritageclubhouse.app`**, purchased
+through Vercel so its DNS is managed in the Vercel dashboard (no third-party
+registrar). The same domain doubles as the app's custom URL. Steps, in order:
 
-1. **Resend → Domains → Add Domain** (e.g. `taylorgrowthconsulting.com` or a
-   dedicated Heritage domain). Add the shown **SPF/DKIM (and DMARC)** DNS records
-   at your registrar; wait for Resend to mark it **Verified**.
-2. In Supabase SMTP settings, change **Sender email** to an address on that
-   verified domain.
-3. Re-test by emailing a non-account address.
+1. **Buy + attach the domain (Vercel).**
+   - Vercel → **Domains → buy `heritageclubhouse.app`** (~$9.99/yr). `.app` is
+     HTTPS-only (HSTS preload) — Vercel auto-provisions the TLS cert.
+   - `heritage-clubhouse` project → **Settings → Domains → Add** `heritageclubhouse.app`
+     (and `www` if wanted). Set it as the **primary** domain. Because every app URL
+     is origin-relative, share links and auth redirects inherit it automatically —
+     no code change.
+2. **Verify the domain in Resend.**
+   - Resend → **Domains → Add Domain** → `heritageclubhouse.app`.
+   - Resend shows **SPF / DKIM (and DMARC)** records. Add each one in **Vercel →
+     the domain → DNS** (since Vercel manages this domain's DNS). Wait for Resend to
+     mark it **Verified**.
+3. **Switch the sender (Supabase).**
+   - SMTP settings → change **Sender email** from `onboarding@resend.dev` to
+     `clubhouse@heritageclubhouse.app`.
+4. **Repoint auth URLs (Supabase).**
+   - Authentication → URL Configuration → set **Site URL** to
+     `https://heritageclubhouse.app` and confirm the `https://heritageclubhouse.app/**`
+     redirect from §3 is present.
+5. **Re-test** by emailing a **non-account** address (a friend, or a second inbox of
+   yours). It should arrive from `clubhouse@heritageclubhouse.app`, render branded,
+   and sign in to `https://heritageclubhouse.app/map`.
 
-Until then, only your own account email will receive magic links.
+Until step 3 is done, only your Resend-account email (`eric@taylorgrowthconsulting.com`)
+receives magic links.
