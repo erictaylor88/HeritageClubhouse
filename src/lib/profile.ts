@@ -8,9 +8,19 @@
 export const USERNAME_MIN = 3;
 export const USERNAME_MAX = 30;
 export const DISPLAY_NAME_MAX = 50;
+export const SLUG_MIN = 3;
+export const SLUG_MAX = 40;
 
 /** Lowercase letters, digits, and underscores only. */
 const USERNAME_RE = /^[a-z0-9_]+$/;
+
+/**
+ * Slugs are friendlier than usernames: hyphens are allowed (the classic
+ * URL-word separator), but a slug must start and end with an alphanumeric so we
+ * never mint links like `/u/-eric_` or `/u/eric--`. Underscores allowed inside
+ * too, for parity with usernames (the default slug is seeded from one).
+ */
+const SLUG_RE = /^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?$/;
 
 /**
  * Usernames double as the public share slug (`/u/[slug]`), so reserve the words
@@ -63,6 +73,33 @@ export function validateUsername(raw: string): ValidationResult {
     };
   if (RESERVED_USERNAMES.has(value))
     return { ok: false, error: "That username is reserved. Try another." };
+  return { ok: true, value };
+}
+
+/** Normalize a raw slug input: trim + lowercase. */
+export function normalizeSlug(raw: string): string {
+  return raw.trim().toLowerCase();
+}
+
+/**
+ * Validate a custom share slug, returning the normalized value. Same reserved
+ * words as usernames (the slug lives in the same `/u/` namespace and reads as
+ * identity), but allows hyphens and enforces clean start/end characters.
+ */
+export function validateShareSlug(raw: string): ValidationResult {
+  const value = normalizeSlug(raw);
+  if (value.length < SLUG_MIN)
+    return { ok: false, error: `Link must be at least ${SLUG_MIN} characters.` };
+  if (value.length > SLUG_MAX)
+    return { ok: false, error: `Link must be ${SLUG_MAX} characters or fewer.` };
+  if (!SLUG_RE.test(value))
+    return {
+      ok: false,
+      error:
+        "Link can use lowercase letters, numbers, hyphens, and underscores, and must start and end with a letter or number.",
+    };
+  if (RESERVED_USERNAMES.has(value))
+    return { ok: false, error: "That link is reserved. Try another." };
   return { ok: true, value };
 }
 

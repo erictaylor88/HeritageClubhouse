@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { validateDisplayName, validateUsername } from "@/lib/profile";
+import {
+  validateDisplayName,
+  validateShareSlug,
+  validateUsername,
+} from "@/lib/profile";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -64,6 +68,55 @@ export async function updateProfile(input: {
   }
 
   revalidatePath("/map");
+  return { ok: true };
+}
+
+/**
+ * Set a custom public-link slug (`/u/[slug]`).
+ *
+ * `share_slug` is a separate, stable field — seeded from the username on first
+ * share but never auto-clobbered — so a user can pick a custom link without it
+ * changing every time they rename. We re-fetch the old slug to revalidate its
+ * cached page when it changes. Uniqueness is DB-enforced (`profiles_share_slug`
+ * unique); we map the unique-violation (23505) to a friendly message. RLS
+ * (`profiles_update`, `id = auth.uid()`) enforces ownership; the explicit `id`
+ * filter is defense-in-depth.
+ */
+export async function updateShareSlug(slug: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "You're not signed in." };
+
+  const parsed = validateShareSlug(slug);
+  if (!parsed.ok) return parsed;
+
+  const { data: current } = await supabase
+    .from("profiles")
+    .select("share_slug")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  // No-op if unchanged — avoids a needless write and a spurious "taken" if the
+  // user re-saves their own current slug.
+  if (current?.share_slug === parsed.value) return { ok: true };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ share_slug: parsed.value, updated_at: new Date().toISOString() })
+    .eq("id", user.id); // defense-in-depth; RLS already enforces ownership
+
+  if (error) {
+    if (error.code === "23505") {
+      return { ok: false, error: "That link is already taken." };
+    }
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/map");
+  if (current?.share_slug) revalidatePath(`/u/${current.share_slug}`);
+  revalidatePath(`/u/${parsed.value}`);
   return { ok: true };
 }
 

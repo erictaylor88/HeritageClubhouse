@@ -61,9 +61,27 @@ export async function generateMetadata({
   const profile = await getSharedProfile(slug);
   if (!profile) return { title: "Heritage Clubhouse" };
   const name = profile.display_name?.trim() || profile.username;
+  const title = `${name}'s Clubhouse — Heritage Clubhouse`;
+  const description = `${name}'s golf passport — the courses they've played, upcoming rounds, and bucket list.`;
+  const url = `/u/${slug.toLowerCase()}`;
+  // The OG/Twitter image is supplied by the colocated opengraph-image.tsx, which
+  // Next merges into both cards automatically — no need to list it here.
   return {
-    title: `${name}'s Clubhouse — Heritage Clubhouse`,
-    description: `${name}'s golf passport — the courses they've played, upcoming rounds, and bucket list.`,
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: "profile",
+      title,
+      description,
+      url,
+      siteName: "Heritage Clubhouse",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+    },
   };
 }
 

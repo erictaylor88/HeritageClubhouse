@@ -2,9 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateProfile, updateSharing } from "@/app/map/profile-actions";
+import {
+  updateProfile,
+  updateShareSlug,
+  updateSharing,
+} from "@/app/map/profile-actions";
 import {
   DISPLAY_NAME_MAX,
+  SLUG_MAX,
   USERNAME_MAX,
   type Profile,
 } from "@/lib/profile";
@@ -150,8 +155,12 @@ export function ProfileBar({ profile }: { profile: Profile }) {
 function SharingControl({ profile }: { profile: Profile }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [savingSlug, startSlugTransition] = useTransition();
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [editingSlug, setEditingSlug] = useState(false);
+  const [slugError, setSlugError] = useState("");
+  const [slugInput, setSlugInput] = useState("");
 
   // The slug is seeded from the username on first enable; until then, preview it.
   const slug = profile.shareSlug ?? profile.username;
@@ -177,6 +186,25 @@ function SharingControl({ profile }: { profile: Profile }) {
     } catch {
       setError("Couldn't copy — copy the link manually.");
     }
+  }
+
+  function startSlugEdit() {
+    setSlugInput(slug);
+    setSlugError("");
+    setEditingSlug(true);
+  }
+
+  function saveSlug() {
+    setSlugError("");
+    startSlugTransition(async () => {
+      const result = await updateShareSlug(slugInput);
+      if (!result.ok) {
+        setSlugError(result.error);
+        return;
+      }
+      setEditingSlug(false);
+      router.refresh();
+    });
   }
 
   return (
@@ -207,23 +235,85 @@ function SharingControl({ profile }: { profile: Profile }) {
       </div>
 
       {profile.isShared ? (
-        <div className="flex items-center gap-2">
-          <a
-            href={path}
-            target="_blank"
-            rel="noreferrer"
-            className="min-w-0 truncate font-[family-name:var(--font-mono)] text-xs text-[var(--brass-deep)] underline-offset-2 hover:underline"
-          >
-            {path}
-          </a>
-          <button
-            type="button"
-            onClick={copyLink}
-            className="shrink-0 text-xs text-[var(--ink-muted)] underline-offset-2 hover:text-[var(--brass-deep)] hover:underline"
-          >
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
+        <>
+          <div className="flex items-center gap-2">
+            <a
+              href={path}
+              target="_blank"
+              rel="noreferrer"
+              className="min-w-0 truncate font-[family-name:var(--font-mono)] text-xs text-[var(--brass-deep)] underline-offset-2 hover:underline"
+            >
+              {path}
+            </a>
+            <button
+              type="button"
+              onClick={copyLink}
+              className="shrink-0 text-xs text-[var(--ink-muted)] underline-offset-2 hover:text-[var(--brass-deep)] hover:underline"
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                editingSlug ? setEditingSlug(false) : startSlugEdit()
+              }
+              className="shrink-0 text-xs text-[var(--ink-muted)] underline-offset-2 hover:text-[var(--brass-deep)] hover:underline"
+            >
+              {editingSlug ? "Close" : "Edit link"}
+            </button>
+          </div>
+
+          {editingSlug && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveSlug();
+              }}
+              className="mt-1 flex flex-col gap-2"
+            >
+              <div className="flex items-center rounded-md border border-[var(--line)] bg-[var(--paper)] focus-within:border-[var(--brass)]">
+                <span className="pl-2 font-[family-name:var(--font-mono)] text-xs text-[var(--ink-muted)]">
+                  /u/
+                </span>
+                <input
+                  type="text"
+                  value={slugInput}
+                  maxLength={SLUG_MAX}
+                  autoFocus
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  onChange={(e) => setSlugInput(e.target.value)}
+                  className="w-full bg-transparent px-1 py-1 font-[family-name:var(--font-mono)] text-xs text-[var(--ink)] outline-none"
+                />
+              </div>
+              <span className="text-[0.7rem] text-[var(--ink-muted)]">
+                Lowercase letters, numbers, hyphens, and underscores. This is your
+                public link.
+              </span>
+              {slugError && (
+                <p className="text-xs text-[var(--oxblood)]">{slugError}</p>
+              )}
+              <div className="flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={savingSlug}
+                  className="rounded-md bg-[var(--forest)] px-3 py-1.5 text-xs font-medium text-[var(--paper)] transition-colors hover:bg-[var(--forest-mid)] disabled:opacity-50"
+                >
+                  {savingSlug ? "Saving…" : "Save link"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingSlug(false)}
+                  disabled={savingSlug}
+                  className="rounded-md border border-[var(--line)] px-3 py-1.5 text-xs text-[var(--ink-muted)] transition-colors hover:bg-[var(--paper-sunk)] disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+        </>
       ) : (
         <p className="text-[0.7rem] text-[var(--ink-muted)]">
           Off — your map is private. Turn on to share it at {path}.

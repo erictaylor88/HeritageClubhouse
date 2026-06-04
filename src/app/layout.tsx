@@ -27,6 +27,11 @@ const courierPrime = localFont({
 });
 
 export const metadata: Metadata = {
+  // Absolute base so file-based OG images + share links resolve to the live
+  // domain (falls back to localhost in dev via the env Vercel injects).
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://heritageclubhouse.app",
+  ),
   title: "Heritage Clubhouse",
   description:
     "A golf passport — a warm, paper-and-brass map of the courses you've played, your upcoming rounds, and your bucket list.",
