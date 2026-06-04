@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import { CourseSearch } from "@/components/course-search";
 import { CourseList } from "@/components/course-list";
 import { MapCanvas } from "@/components/map-canvas";
+import { ProfileBar } from "@/components/profile-bar";
 import { type CourseEntry, type CourseStatus } from "@/lib/courses";
+import { type Profile } from "@/lib/profile";
 
 async function signOut() {
   "use server";
@@ -41,7 +43,7 @@ export default async function MapPage() {
   const [{ data: profile }, { data: entryRows }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("username, display_name")
+      .select("username, display_name, is_shared, share_slug")
       .eq("id", user.id)
       .maybeSingle(),
     supabase
@@ -53,7 +55,14 @@ export default async function MapPage() {
       .order("created_at", { ascending: false }),
   ]);
 
-  const name = profile?.display_name ?? user.email ?? "there";
+  const profileData: Profile | null = profile
+    ? {
+        username: profile.username,
+        displayName: profile.display_name,
+        isShared: profile.is_shared,
+        shareSlug: profile.share_slug,
+      }
+    : null;
 
   // Shape rows into the UI type, dropping any orphaned-cache rows defensively.
   const entries: CourseEntry[] = ((entryRows ?? []) as unknown as EntryRow[])
@@ -95,10 +104,14 @@ export default async function MapPage() {
         {/* Logbook panel: search + your courses */}
         <aside className="hc-grain flex w-full flex-col gap-6 border-b border-[var(--line)] bg-[var(--paper)] p-5 md:w-[360px] md:shrink-0 md:overflow-y-auto md:border-b-0 md:border-r">
           <div>
-            <p className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.16em] text-[var(--ink-muted)]">
-              Welcome, {name}
-            </p>
-            <h1 className="mt-1 font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-[var(--ink)]">
+            {profileData ? (
+              <ProfileBar profile={profileData} />
+            ) : (
+              <p className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.16em] text-[var(--ink-muted)]">
+                Welcome, {user.email ?? "there"}
+              </p>
+            )}
+            <h1 className="mt-3 font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-[var(--ink)]">
               Add a course
             </h1>
           </div>
