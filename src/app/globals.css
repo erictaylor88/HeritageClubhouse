@@ -189,6 +189,19 @@ body {
     box-shadow 0.16s cubic-bezier(0.2, 0, 0.2, 1);
   animation: hc-stamp-in 0.22s cubic-bezier(0.2, 0, 0.2, 1);
 }
+/* Friend "guest stamp": the badge FILLED in the friend's color with a paper
+   monogram (their initial), slightly smaller than your own pins. The fill vs.
+   your outlined status stamps is the "theirs vs. yours" signal (§9). `--c` is
+   the per-friend color, passed inline. */
+.hc-stamp-guest .hc-stamp-badge {
+  width: 30px;
+  height: 30px;
+  background: var(--c);
+  color: var(--surface);
+  border: 2px solid color-mix(in srgb, var(--c) 72%, #1c130a);
+  font-size: 12px;
+}
+
 /* Stamp "press" on appearance — the one expressive flourish (§6.4). */
 @keyframes hc-stamp-in {
   from {

@@ -8,7 +8,7 @@ import { ProfileBar } from "@/components/profile-bar";
 import { FriendsBar } from "@/components/friends-bar";
 import { type CourseEntry, type CourseStatus } from "@/lib/courses";
 import { type Profile } from "@/lib/profile";
-import { type Friend } from "@/lib/follow";
+import { type Friend, type FriendOverlay, friendColor } from "@/lib/follow";
 
 async function signOut() {
   "use server";
@@ -63,13 +63,15 @@ export default async function MapPage() {
         .order("created_at", { ascending: true }),
     ]);
 
-  // Friends: the members I follow, each with how many of their courses I can
-  // see. The course count comes from the follower-gated read path — RLS only
-  // returns entries for followees who have `is_shared`, so a private map yields
-  // 0. We fetch the friend profiles and their (gated) entry counts in parallel,
-  // then preserve follow order.
+  // Friends: the members I follow, each with the courses I can see. The entries
+  // come from the follower-gated read path — RLS only returns rows for followees
+  // who have `is_shared`, so a private map yields none. We fetch friend profiles
+  // and their (gated) entries in parallel, group entries per friend, preserve
+  // follow order, and assign each a stable color. `friendOverlays` is the subset
+  // with visible courses, ready to render as map layers.
   const followeeIds = (followRows ?? []).map((r) => r.followee_id);
   let friends: Friend[] = [];
+  let friendOverlays: FriendOverlay[] = [];
   if (followeeIds.length > 0) {
     const [{ data: friendProfiles }, { data: friendEntryRows }] =
       await Promise.all([
@@ -79,27 +81,62 @@ export default async function MapPage() {
           .in("id", followeeIds),
         supabase
           .from("course_entries")
-          .select("user_id")
-          .in("user_id", followeeIds),
+          .select(
+            "id, user_id, status, date_played, best_score, notes, course_cache(course_id, club_name, course_name, address, lat, lng)",
+          )
+          .in("user_id", followeeIds)
+          .order("created_at", { ascending: false }),
       ]);
 
-    const counts = new Map<string, number>();
-    for (const row of friendEntryRows ?? []) {
-      counts.set(row.user_id, (counts.get(row.user_id) ?? 0) + 1);
+    // Group each friend's readable entries by owner, dropping orphaned-cache rows.
+    const entriesByUser = new Map<string, CourseEntry[]>();
+    for (const row of (friendEntryRows ?? []) as unknown as (EntryRow & {
+      user_id: string;
+    })[]) {
+      if (!row.course_cache) continue;
+      const list = entriesByUser.get(row.user_id) ?? [];
+      list.push({
+        id: row.id,
+        status: row.status as CourseStatus,
+        datePlayed: row.date_played,
+        bestScore: row.best_score,
+        notes: row.notes,
+        course: {
+          courseId: row.course_cache.course_id,
+          clubName: row.course_cache.club_name,
+          courseName: row.course_cache.course_name,
+          address: row.course_cache.address,
+          lat: row.course_cache.lat,
+          lng: row.course_cache.lng,
+        },
+      });
+      entriesByUser.set(row.user_id, list);
     }
+
     const byId = new Map(
       (friendProfiles ?? []).map((p) => [p.id, p] as const),
     );
     friends = followeeIds
       .map((id) => byId.get(id))
       .filter((p): p is NonNullable<typeof p> => Boolean(p))
-      .map((p) => ({
+      .map((p, i) => ({
         id: p.id,
         username: p.username,
         displayName: p.display_name,
         isShared: p.is_shared,
         shareSlug: p.share_slug,
-        courseCount: counts.get(p.id) ?? 0,
+        courseCount: entriesByUser.get(p.id)?.length ?? 0,
+        color: friendColor(i),
+      }));
+
+    friendOverlays = friends
+      .filter((f) => f.courseCount > 0)
+      .map((f) => ({
+        id: f.id,
+        name: f.displayName?.trim() || f.username,
+        username: f.username,
+        color: f.color,
+        entries: entriesByUser.get(f.id) ?? [],
       }));
   }
 
@@ -193,7 +230,7 @@ export default async function MapPage() {
 
         {/* Interactive map with status-colored stamp pins. */}
         <main className="relative h-[60vh] w-full md:h-auto md:flex-1">
-          <MapCanvas entries={entries} />
+          <MapCanvas entries={entries} friends={friendOverlays} />
         </main>
       </div>
     </div>

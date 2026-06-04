@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type { CourseEntry } from "@/lib/courses";
+import type { FriendOverlay } from "@/lib/follow";
 
 // Leaflet touches `window` at import time, so the map must be client-only.
 const CourseMap = dynamic(
@@ -12,6 +13,12 @@ const CourseMap = dynamic(
   },
 );
 
-export function MapCanvas({ entries }: { entries: CourseEntry[] }) {
-  return <CourseMap entries={entries} />;
+export function MapCanvas({
+  entries,
+  friends = [],
+}: {
+  entries: CourseEntry[];
+  friends?: FriendOverlay[];
+}) {
+  return <CourseMap entries={entries} friends={friends} />;
 }
