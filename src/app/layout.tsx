@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 // Self-hosted (per design spec §10: self-host + font-display: swap, Latin subset).
@@ -47,7 +48,10 @@ export default function RootLayout({
       lang="en"
       className={`${fraunces.variable} ${inter.variable} ${courierPrime.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
