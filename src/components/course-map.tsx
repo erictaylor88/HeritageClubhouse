@@ -220,6 +220,17 @@ export function CourseMap({
         <FitToEntries entries={entries} />
       </MapContainer>
 
+      {/* Empty-state hint: a gentle floating note over the default view when
+          you've added no courses yet. Non-interactive so it never blocks the
+          map underneath. */}
+      {entries.length === 0 && (
+        <div className="pointer-events-none absolute inset-x-0 top-4 z-[500] flex justify-center px-4">
+          <p className="max-w-xs rounded-full border border-[var(--line)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-4 py-2 text-center font-[family-name:var(--font-mono)] text-[0.7rem] uppercase tracking-[0.12em] text-[var(--ink-muted)] shadow-[var(--shadow-sm)] backdrop-blur-sm">
+            Add a course to drop your first stamp here
+          </p>
+        </div>
+      )}
+
       {friends.length > 0 && (
         <FriendOverlayControl
           friends={friends}

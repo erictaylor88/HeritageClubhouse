@@ -9,9 +9,23 @@ const CourseMap = dynamic(
   () => import("./course-map").then((m) => m.CourseMap),
   {
     ssr: false,
-    loading: () => <div className="h-full w-full bg-[var(--paper-sunk)]" />,
+    loading: () => <MapSkeleton />,
   },
 );
+
+/** Branded placeholder while the Leaflet bundle + tiles load. */
+function MapSkeleton() {
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-[var(--paper-sunk)]">
+      <span
+        className="animate-pulse font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.18em] text-[var(--ink-muted)]"
+        role="status"
+      >
+        Unrolling the map…
+      </span>
+    </div>
+  );
+}
 
 export function MapCanvas({
   entries,

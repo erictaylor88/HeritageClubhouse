@@ -69,10 +69,14 @@ export function FriendsBar({ friends }: { friends: Friend[] }) {
       </form>
 
       {friends.length === 0 ? (
-        <p className="text-sm text-[var(--ink-muted)]">
-          You&apos;re not following anyone yet. Follow a friend by their
-          @username to see their map.
-        </p>
+        <div className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-center">
+          <p className="font-[family-name:var(--font-display)] text-[15px] text-[var(--ink)]">
+            No friends yet.
+          </p>
+          <p className="mt-1 text-xs text-[var(--ink-muted)]">
+            Follow a friend by their @username to overlay their map.
+          </p>
+        </div>
       ) : (
         <ul className="flex flex-col gap-1.5">
           {friends.map((friend) => (

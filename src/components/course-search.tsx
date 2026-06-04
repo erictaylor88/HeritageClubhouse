@@ -100,7 +100,27 @@ export function CourseSearch() {
       />
 
       {state === "searching" && (
-        <p className="text-sm text-[var(--ink-muted)]">Searching…</p>
+        <>
+          <p className="sr-only" role="status">
+            Searching…
+          </p>
+          <ul className="flex flex-col gap-2" aria-hidden>
+            {[0, 1, 2].map((i) => (
+              <li
+                key={i}
+                className="rounded-md border border-[var(--line)] bg-[var(--surface)] p-3"
+              >
+                <div className="hc-skeleton h-4 w-2/3 rounded" />
+                <div className="hc-skeleton mt-2 h-3 w-1/2 rounded" />
+                <div className="mt-2.5 flex gap-1.5">
+                  <div className="hc-skeleton h-6 w-16 rounded-full" />
+                  <div className="hc-skeleton h-6 w-16 rounded-full" />
+                  <div className="hc-skeleton h-6 w-20 rounded-full" />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
       {state === "rate-limited" && (
         <p className="text-sm text-[var(--oxblood)]">

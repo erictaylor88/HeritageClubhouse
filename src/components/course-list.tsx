@@ -15,9 +15,14 @@ import { StatusSwatch } from "@/components/status-chip";
 export function CourseList({ entries }: { entries: CourseEntry[] }) {
   if (entries.length === 0) {
     return (
-      <p className="text-sm text-[var(--ink-muted)]">
-        No courses yet. Search above to add your first stamp.
-      </p>
+      <div className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-center">
+        <p className="font-[family-name:var(--font-display)] text-[15px] text-[var(--ink)]">
+          No courses yet.
+        </p>
+        <p className="mt-1 text-xs text-[var(--ink-muted)]">
+          Search above to add your first stamp.
+        </p>
+      </div>
     );
   }
 

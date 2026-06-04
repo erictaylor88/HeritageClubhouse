@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { CourseSearch } from "@/components/course-search";
 import { CourseList } from "@/components/course-list";
 import { MapCanvas } from "@/components/map-canvas";
+import { MapWorkspace } from "@/components/map-workspace";
 import { ProfileBar } from "@/components/profile-bar";
 import { FriendsBar } from "@/components/friends-bar";
 import { type CourseEntry, type CourseStatus } from "@/lib/courses";
@@ -185,54 +186,51 @@ export default async function MapPage() {
         </form>
       </header>
 
-      <div className="flex flex-1 flex-col md:h-[calc(100dvh-3.5rem)] md:flex-row md:overflow-hidden">
-        {/* Logbook panel: search + your courses */}
-        <aside className="hc-grain flex w-full flex-col gap-6 border-b border-[var(--line)] bg-[var(--paper)] p-5 md:w-[360px] md:shrink-0 md:overflow-y-auto md:border-b-0 md:border-r">
-          <div>
-            {profileData ? (
-              <ProfileBar profile={profileData} />
-            ) : (
-              <p className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.16em] text-[var(--ink-muted)]">
-                Welcome, {user.email ?? "there"}
-              </p>
-            )}
-            <h1 className="mt-3 font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-[var(--ink)]">
-              Add a course
-            </h1>
-          </div>
-
-          <CourseSearch />
-
-          <div className="flex flex-col gap-3 border-t border-[var(--line)] pt-5">
-            <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-[var(--forest)]">
-              Your courses
-              {entries.length > 0 && (
-                <span className="ml-2 font-[family-name:var(--font-mono)] text-xs font-normal text-[var(--ink-muted)]">
-                  {entries.length}
-                </span>
+      <MapWorkspace
+        panel={
+          <>
+            <div>
+              {profileData ? (
+                <ProfileBar profile={profileData} />
+              ) : (
+                <p className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.16em] text-[var(--ink-muted)]">
+                  Welcome, {user.email ?? "there"}
+                </p>
               )}
-            </h2>
-            <CourseList entries={entries} />
-          </div>
+              <h1 className="mt-3 font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-[var(--ink)]">
+                Add a course
+              </h1>
+            </div>
 
-          <div className="flex flex-col gap-3 border-t border-[var(--line)] pt-5">
-            <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-[var(--forest)]">
-              Friends
-              {friends.length > 0 && (
-                <span className="ml-2 font-[family-name:var(--font-mono)] text-xs font-normal text-[var(--ink-muted)]">
-                  {friends.length}
-                </span>
-              )}
-            </h2>
-            <FriendsBar friends={friends} />
-          </div>
-        </aside>
+            <CourseSearch />
 
-        {/* Interactive map with status-colored stamp pins. */}
-        <main className="relative h-[60vh] w-full md:h-auto md:flex-1">
-          <MapCanvas entries={entries} friends={friendOverlays} />
-        </main>
-      </div>
+            <div className="flex flex-col gap-3 border-t border-[var(--line)] pt-5">
+              <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-[var(--forest)]">
+                Your courses
+                {entries.length > 0 && (
+                  <span className="ml-2 font-[family-name:var(--font-mono)] text-xs font-normal text-[var(--ink-muted)]">
+                    {entries.length}
+                  </span>
+                )}
+              </h2>
+              <CourseList entries={entries} />
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-[var(--line)] pt-5">
+              <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-[var(--forest)]">
+                Friends
+                {friends.length > 0 && (
+                  <span className="ml-2 font-[family-name:var(--font-mono)] text-xs font-normal text-[var(--ink-muted)]">
+                    {friends.length}
+                  </span>
+                )}
+              </h2>
+              <FriendsBar friends={friends} />
+            </div>
+          </>
+        }
+        map={<MapCanvas entries={entries} friends={friendOverlays} />}
+      />
     </div>
   );
 }

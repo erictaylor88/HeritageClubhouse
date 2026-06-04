@@ -151,6 +151,38 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
+   Skeleton shimmer — a warm sweep across paper-sunk for loading placeholders.
+   Restrained (design spec §6.4); falls back to a static block when the user
+   prefers reduced motion.
+--------------------------------------------------------------------------- */
+.hc-skeleton {
+  background-color: var(--paper-sunk);
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in srgb, var(--surface) 70%, transparent) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: hc-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes hc-shimmer {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hc-skeleton {
+    animation: none;
+    background-image: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
    Leaflet / map — Logbook overrides + status-colored stamp pins.
 --------------------------------------------------------------------------- */
 .leaflet-container {
