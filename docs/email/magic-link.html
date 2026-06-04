@@ -1,0 +1,97 @@
+<!--
+  Heritage Clubhouse — Magic Link email (The Logbook).
+  Paste into Supabase → Authentication → Email Templates → "Magic Link".
+  Keep the {{ .ConfirmationURL }} token intact — Supabase substitutes the
+  one-time sign-in link at send time. Email clients ignore <style> and external
+  fonts inconsistently, so everything here is inline + web-safe (Georgia for the
+  editorial serif, Arial/Helvetica for body). Subject line suggestion:
+  "Your Heritage Clubhouse sign-in link".
+-->
+<body style="margin:0;padding:0;background-color:#f1e9d6;">
+  <!-- Hidden preheader (shows as the inbox preview, then collapses). -->
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#f1e9d6;font-size:1px;line-height:1px;">
+    Your one-time link to open your Clubhouse — expires shortly.
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1e9d6;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#fffdf7;border:1px solid #d9cfb8;border-radius:8px;">
+          <!-- Wordmark + brass hairline -->
+          <tr>
+            <td style="padding:28px 32px 0 32px;">
+              <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;font-weight:bold;letter-spacing:0.5px;color:#1f4d2e;">
+                Heritage&nbsp;Clubhouse
+              </div>
+              <div style="height:1px;background-color:#d9b878;margin-top:8px;"></div>
+            </td>
+          </tr>
+
+          <!-- Heading + body -->
+          <tr>
+            <td style="padding:24px 32px 0 32px;">
+              <h1 style="margin:0 0 12px 0;font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:bold;line-height:1.25;color:#20241e;">
+                Your sign-in link
+              </h1>
+              <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#5c5848;">
+                Tap the button below to open your Clubhouse — your map of the courses
+                you've played, rounds ahead, and the ones still on the list. The link
+                works once and expires shortly.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Button (bulletproof: table + inline) -->
+          <tr>
+            <td style="padding:24px 32px 8px 32px;">
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" bgcolor="#1f4d2e" style="border-radius:8px;">
+                    <a href="{{ .ConfirmationURL }}" target="_blank"
+                       style="display:inline-block;padding:13px 28px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#faf6ec;text-decoration:none;border-radius:8px;">
+                      Open my Clubhouse
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Fallback URL -->
+          <tr>
+            <td style="padding:8px 32px 0 32px;">
+              <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;color:#5c5848;">
+                Or paste this link into your browser:
+              </p>
+              <p style="margin:4px 0 0 0;font-family:'Courier New',Courier,monospace;font-size:12px;line-height:1.5;color:#8a6d3b;word-break:break-all;">
+                {{ .ConfirmationURL }}
+              </p>
+            </td>
+          </tr>
+
+          <!-- Divider + footnote -->
+          <tr>
+            <td style="padding:24px 32px 28px 32px;">
+              <div style="height:1px;background-color:#d9cfb8;"></div>
+              <p style="margin:16px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;color:#5c5848;">
+                If you didn't ask to sign in, you can safely ignore this email — no
+                one can access your Clubhouse without this link.
+              </p>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Outside-card footer -->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;">
+          <tr>
+            <td align="center" style="padding:16px 32px 0 32px;">
+              <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.5;color:#8a8470;">
+                Heritage Clubhouse — a golf passport.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
