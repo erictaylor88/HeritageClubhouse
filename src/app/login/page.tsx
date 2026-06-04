@@ -55,8 +55,9 @@ export default function LoginPage() {
         <CardContent>
           {status === "sent" ? (
             <div className="rounded-md border border-[var(--line)] bg-[var(--paper-sunk)] p-4 text-sm text-[var(--ink)]">
-              Check <span className="font-medium">{email}</span> for your sign-in
-              link. You can close this tab once you&apos;ve opened it.
+              Check <span className="font-medium">{email}</span>{" "}
+              for your sign-in link. You can close this tab once you&apos;ve
+              opened it.
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
