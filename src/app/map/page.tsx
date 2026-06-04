@@ -5,8 +5,10 @@ import { CourseSearch } from "@/components/course-search";
 import { CourseList } from "@/components/course-list";
 import { MapCanvas } from "@/components/map-canvas";
 import { ProfileBar } from "@/components/profile-bar";
+import { FriendsBar } from "@/components/friends-bar";
 import { type CourseEntry, type CourseStatus } from "@/lib/courses";
 import { type Profile } from "@/lib/profile";
+import { type Friend } from "@/lib/follow";
 
 async function signOut() {
   "use server";
@@ -40,20 +42,66 @@ export default async function MapPage() {
   // Proxy already gates this route; this is defense-in-depth.
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: entryRows }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("username, display_name, is_shared, share_slug")
-      .eq("id", user.id)
-      .maybeSingle(),
-    supabase
-      .from("course_entries")
-      .select(
-        "id, status, date_played, best_score, notes, course_cache(course_id, club_name, course_name, address, lat, lng)",
-      )
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false }),
-  ]);
+  const [{ data: profile }, { data: entryRows }, { data: followRows }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("username, display_name, is_shared, share_slug")
+        .eq("id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("course_entries")
+        .select(
+          "id, status, date_played, best_score, notes, course_cache(course_id, club_name, course_name, address, lat, lng)",
+        )
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("follows")
+        .select("followee_id, created_at")
+        .eq("follower_id", user.id)
+        .order("created_at", { ascending: true }),
+    ]);
+
+  // Friends: the members I follow, each with how many of their courses I can
+  // see. The course count comes from the follower-gated read path — RLS only
+  // returns entries for followees who have `is_shared`, so a private map yields
+  // 0. We fetch the friend profiles and their (gated) entry counts in parallel,
+  // then preserve follow order.
+  const followeeIds = (followRows ?? []).map((r) => r.followee_id);
+  let friends: Friend[] = [];
+  if (followeeIds.length > 0) {
+    const [{ data: friendProfiles }, { data: friendEntryRows }] =
+      await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, username, display_name, is_shared, share_slug")
+          .in("id", followeeIds),
+        supabase
+          .from("course_entries")
+          .select("user_id")
+          .in("user_id", followeeIds),
+      ]);
+
+    const counts = new Map<string, number>();
+    for (const row of friendEntryRows ?? []) {
+      counts.set(row.user_id, (counts.get(row.user_id) ?? 0) + 1);
+    }
+    const byId = new Map(
+      (friendProfiles ?? []).map((p) => [p.id, p] as const),
+    );
+    friends = followeeIds
+      .map((id) => byId.get(id))
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+      .map((p) => ({
+        id: p.id,
+        username: p.username,
+        displayName: p.display_name,
+        isShared: p.is_shared,
+        shareSlug: p.share_slug,
+        courseCount: counts.get(p.id) ?? 0,
+      }));
+  }
 
   const profileData: Profile | null = profile
     ? {
@@ -128,6 +176,18 @@ export default async function MapPage() {
               )}
             </h2>
             <CourseList entries={entries} />
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-[var(--line)] pt-5">
+            <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-[var(--forest)]">
+              Friends
+              {friends.length > 0 && (
+                <span className="ml-2 font-[family-name:var(--font-mono)] text-xs font-normal text-[var(--ink-muted)]">
+                  {friends.length}
+                </span>
+              )}
+            </h2>
+            <FriendsBar friends={friends} />
           </div>
         </aside>
 
