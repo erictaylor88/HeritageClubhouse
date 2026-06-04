@@ -75,13 +75,34 @@ export function formatDatePlayed(iso: string): string {
   return `${MONTHS[m - 1]} ${d}, ${y}`;
 }
 
+/**
+ * GolfCourseAPI abbreviates trailing words inconsistently ("Old Greenwood Gc",
+ * "Pebble Beach Gl"). Expand the confident, unambiguous ones at display time —
+ * the cache itself stays a faithful write-through of the API (architecture).
+ */
+const NAME_EXPANSIONS: Record<string, string> = {
+  gc: "Golf Club",
+  cc: "Country Club",
+  gl: "Golf Links",
+  "g&cc": "Golf & Country Club",
+};
+
+/** Clean a raw API name for display: trim, collapse spaces, expand abbrevs. */
+export function cleanCourseName(raw: string): string {
+  return raw
+    .trim()
+    .split(/\s+/)
+    .map((word) => NAME_EXPANSIONS[word.toLowerCase()] ?? word)
+    .join(" ");
+}
+
 /** A human label for a course, falling back gracefully across the name fields. */
 export function courseTitle(course: {
   clubName: string | null;
   courseName: string | null;
 }): string {
-  const club = course.clubName?.trim();
-  const name = course.courseName?.trim();
+  const club = course.clubName ? cleanCourseName(course.clubName) : "";
+  const name = course.courseName ? cleanCourseName(course.courseName) : "";
   if (club && name && club !== name) return `${club} — ${name}`;
   return club || name || "Unnamed course";
 }
