@@ -77,7 +77,10 @@ Dashboard → **Authentication → Email Templates** → for each, replace the
 - Magic Link → `Your Heritage Clubhouse sign-in link`
 
 **Both templates use the token_hash sign-in URL, not `{{ .ConfirmationURL }}`.**
-The link is `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type={{ .Type }}&next=/map`,
+The link is `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/map`
+(`type=email` is hard-coded — `{{ .Type }}` is **not** a Supabase template
+variable and renders empty; `verifyOtp({ type: 'email', token_hash })` handles
+both new and returning users),
 which lands on [`src/app/auth/confirm/route.ts`](../src/app/auth/confirm/route.ts)
 and verifies the token server-side (`verifyOtp`). This is what makes a link
 clicked from the Gmail app on mobile work — unlike the old `{{ .ConfirmationURL }}`
