@@ -57,16 +57,28 @@ to allow-listed URLs; otherwise it falls back to the Site URL.
 The app requests `emailRedirectTo = <origin>/auth/callback` (see
 [`src/app/login/page.tsx`](../src/app/login/page.tsx)); these entries authorize it.
 
-## 4. Brand the email
+## 4. Brand the emails (TWO templates)
 
-Dashboard → **Authentication → Email Templates → Magic Link**. Replace the
-**Message body** with the contents of
-[`docs/email/magic-link.html`](./email/magic-link.html). Suggested **Subject**:
-`Your Heritage Clubhouse sign-in link`.
+`signInWithOtp` sends a **different template depending on whether the email is
+new or returning**, so brand both — otherwise first-time users get the default
+unbranded "Confirm signup" email:
+
+| Supabase template | Fires for | Paste |
+|---|---|---|
+| **Confirm signup** | a brand-new email (first login) | [`docs/email/confirm-signup.html`](./email/confirm-signup.html) |
+| **Magic Link** | a returning user | [`docs/email/magic-link.html`](./email/magic-link.html) |
+
+Dashboard → **Authentication → Email Templates** → for each, replace the
+**Message body** and set a **Subject**:
+- Confirm signup → `Confirm your email — Heritage Clubhouse`
+- Magic Link → `Your Heritage Clubhouse sign-in link`
 
 Keep the `{{ .ConfirmationURL }}` token intact — Supabase substitutes the
-one-time link at send time. (Magic Link also supports `{{ .Token }}`,
-`{{ .SiteURL }}`, `{{ .Email }}`, `{{ .RedirectTo }}`.)
+one-time link at send time. (Both also support `{{ .Token }}`, `{{ .SiteURL }}`,
+`{{ .Email }}`, `{{ .RedirectTo }}`.)
+
+> Tip: to see the branded Magic Link email yourself, you'd need to sign in as a
+> *returning* user — i.e. after your first (signup) login.
 
 ## 5. Test
 
