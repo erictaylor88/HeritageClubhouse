@@ -42,13 +42,28 @@ export type CourseSearchResult = {
   lng: number | null;
 };
 
-/** A course the signed-in user has logged, joined to its cached coordinates. */
+/**
+ * One recorded play of a course — the detail half of the header/detail split.
+ * A course (entry) can hold many; a "played" course may also hold zero.
+ */
+export type Round = {
+  id: string;
+  datePlayed: string | null;
+  score: number | null;
+  notes: string | null;
+};
+
+/**
+ * A course the signed-in user has logged, joined to its cached coordinates. The
+ * entry is the *header* (status + a course-level note); individual plays live in
+ * {@link rounds}. Course-level date/score are derived from rounds, never stored
+ * (see {@link lastPlayed}, {@link bestScore}, {@link roundCount}).
+ */
 export type CourseEntry = {
   id: string;
   status: CourseStatus;
-  datePlayed: string | null;
-  bestScore: number | null;
   notes: string | null;
+  rounds: Round[];
   course: {
     courseId: string;
     clubName: string | null;
@@ -58,6 +73,94 @@ export type CourseEntry = {
     lng: number;
   };
 };
+
+/** Total number of recorded plays for an entry. */
+export function roundCount(entry: CourseEntry): number {
+  return entry.rounds.length;
+}
+
+/** Most recent play date across an entry's rounds (ISO string), or null. */
+export function lastPlayed(entry: CourseEntry): string | null {
+  let latest: string | null = null;
+  for (const r of entry.rounds) {
+    if (r.datePlayed && (latest === null || r.datePlayed > latest)) {
+      latest = r.datePlayed;
+    }
+  }
+  return latest;
+}
+
+/** Lowest (best) score across an entry's rounds, or null if none recorded. */
+export function bestScore(entry: CourseEntry): number | null {
+  let best: number | null = null;
+  for (const r of entry.rounds) {
+    if (r.score !== null && (best === null || r.score < best)) best = r.score;
+  }
+  return best;
+}
+
+/** An entry's rounds, newest play first; undated rounds sort to the end. */
+export function roundsByDateDesc(rounds: Round[]): Round[] {
+  return [...rounds].sort((a, b) => {
+    if (a.datePlayed === b.datePlayed) return 0;
+    if (a.datePlayed === null) return 1;
+    if (b.datePlayed === null) return -1;
+    return a.datePlayed > b.datePlayed ? -1 : 1;
+  });
+}
+
+/**
+ * The raw shape of a `course_entries` row joined to `course_cache` and `rounds`,
+ * as returned by Supabase. Shared across every read path (owner map, friend
+ * overlay, public profile, The Annual) so the row→{@link CourseEntry} shaping
+ * lives in one place. `rounds` is optional: callers that don't need play detail
+ * (e.g. friend map pins) omit it and get an empty array.
+ */
+export type EntryRow = {
+  id: string;
+  status: string;
+  notes: string | null;
+  course_cache: {
+    course_id: string;
+    club_name: string | null;
+    course_name: string | null;
+    address: string | null;
+    lat: number;
+    lng: number;
+  } | null;
+  rounds?:
+    | {
+        id: string;
+        date_played: string | null;
+        score: number | null;
+        notes: string | null;
+      }[]
+    | null;
+};
+
+/** Shape one row into a {@link CourseEntry}, or null if its cache row is missing. */
+export function rowToCourseEntry(row: EntryRow): CourseEntry | null {
+  if (!row.course_cache) return null;
+  return {
+    id: row.id,
+    status: row.status as CourseStatus,
+    notes: row.notes,
+    rounds: (row.rounds ?? []).map((r) => ({
+      id: r.id,
+      datePlayed: r.date_played,
+      score: r.score,
+      notes: r.notes,
+    })),
+    course: {
+      courseId: row.course_cache.course_id,
+      clubName: row.course_cache.club_name,
+      courseName: row.course_cache.course_name,
+      address: row.course_cache.address,
+      lat: row.course_cache.lat,
+      lng: row.course_cache.lng,
+    },
+  };
+}
 
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",

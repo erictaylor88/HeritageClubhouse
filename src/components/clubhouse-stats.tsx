@@ -18,6 +18,10 @@ export function ClubhouseStats({
     { label: stats.total === 1 ? "Course" : "Courses", value: stats.total },
     { label: "Played", value: stats.played },
   ];
+  // Rounds only adds signal once a course has been played more than once
+  // (otherwise it just equals the played count).
+  if (stats.rounds > stats.played)
+    cells.push({ label: stats.rounds === 1 ? "Round" : "Rounds", value: stats.rounds });
   if (stats.upcoming > 0) cells.push({ label: "Upcoming", value: stats.upcoming });
   if (stats.bucketList > 0)
     cells.push({ label: "Bucket list", value: stats.bucketList });
@@ -26,19 +30,28 @@ export function ClubhouseStats({
     cells.push({ label: "Countries", value: stats.countries });
 
   return (
-    <dl
-      className={`flex flex-wrap gap-x-6 gap-y-3 rounded-md border border-[var(--line)] bg-[var(--surface)] px-4 py-3 ${className}`}
+    <div
+      className={`flex flex-col gap-2.5 rounded-md border border-[var(--line)] bg-[var(--surface)] px-4 py-3 ${className}`}
     >
-      {cells.map((cell) => (
-        <div key={cell.label} className="flex flex-col">
-          <dt className="font-[family-name:var(--font-mono)] text-[0.65rem] uppercase tracking-[0.14em] text-[var(--ink-muted)]">
-            {cell.label}
-          </dt>
-          <dd className="font-[family-name:var(--font-display)] text-2xl font-semibold tabular-nums text-[var(--ink)]">
-            {cell.value}
-          </dd>
-        </div>
-      ))}
-    </dl>
+      <dl className="flex flex-wrap gap-x-6 gap-y-3">
+        {cells.map((cell) => (
+          <div key={cell.label} className="flex flex-col">
+            <dt className="font-[family-name:var(--font-mono)] text-[0.65rem] uppercase tracking-[0.14em] text-[var(--ink-muted)]">
+              {cell.label}
+            </dt>
+            <dd className="font-[family-name:var(--font-display)] text-2xl font-semibold tabular-nums text-[var(--ink)]">
+              {cell.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {stats.mostPlayed && (
+        <p className="border-t border-[var(--line)] pt-2 font-[family-name:var(--font-mono)] text-[0.65rem] uppercase tracking-[0.12em] text-[var(--ink-muted)]">
+          Most played ·{" "}
+          <span className="text-[var(--ink)]">{stats.mostPlayed.title}</span>{" "}
+          ({stats.mostPlayed.count}×)
+        </p>
+      )}
+    </div>
   );
 }

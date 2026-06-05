@@ -1,8 +1,11 @@
 import {
   COURSE_STATUSES,
   STATUS_META,
+  bestScore,
   courseTitle,
   formatDatePlayed,
+  lastPlayed,
+  roundCount,
   type CourseEntry,
 } from "@/lib/courses";
 import { StatusSwatch } from "@/components/status-chip";
@@ -36,10 +39,11 @@ export function PublicCourseList({ entries }: { entries: CourseEntry[] }) {
             <ul className="flex flex-col gap-1.5">
               {group.map((entry) => {
                 const isPlayed = entry.status === "played";
-                const hasMeta =
-                  (isPlayed &&
-                    (entry.datePlayed || entry.bestScore !== null)) ||
-                  Boolean(entry.notes);
+                const last = lastPlayed(entry);
+                const best = bestScore(entry);
+                const plays = roundCount(entry);
+                const hasPlayMeta = isPlayed && (last !== null || best !== null);
+                const hasMeta = hasPlayMeta || Boolean(entry.notes);
                 return (
                   <li
                     key={entry.id}
@@ -55,21 +59,14 @@ export function PublicCourseList({ entries }: { entries: CourseEntry[] }) {
                     )}
                     {hasMeta && (
                       <div className="mt-1.5 flex flex-col gap-1">
-                        {isPlayed &&
-                          (entry.datePlayed || entry.bestScore !== null) && (
-                            <p className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.08em] text-[var(--ink-muted)]">
-                              {entry.datePlayed && (
-                                <span>
-                                  Played {formatDatePlayed(entry.datePlayed)}
-                                </span>
-                              )}
-                              {entry.datePlayed &&
-                                entry.bestScore !== null && <span> · </span>}
-                              {entry.bestScore !== null && (
-                                <span>Best {entry.bestScore}</span>
-                              )}
-                            </p>
-                          )}
+                        {hasPlayMeta && (
+                          <p className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.08em] text-[var(--ink-muted)]">
+                            {last && <span>Played {formatDatePlayed(last)}</span>}
+                            {last && best !== null && <span> · </span>}
+                            {best !== null && <span>Best {best}</span>}
+                            {plays > 1 && <span> · {plays} rounds</span>}
+                          </p>
+                        )}
                         {entry.notes && (
                           <p className="text-xs italic text-[var(--ink-muted)]">
                             {entry.notes}

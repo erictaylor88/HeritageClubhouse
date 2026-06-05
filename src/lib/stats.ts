@@ -6,7 +6,7 @@
  * total yardage) come later, gated on `course_cache.raw.tees`.
  */
 
-import type { CourseEntry } from "@/lib/courses";
+import { courseTitle, type CourseEntry } from "@/lib/courses";
 
 export type ClubhouseStats = {
   total: number;
@@ -17,6 +17,10 @@ export type ClubhouseStats = {
   states: number;
   /** Distinct countries seen across course addresses. */
   countries: number;
+  /** Total recorded plays across every entry's rounds. */
+  rounds: number;
+  /** The most-played course and its play count, when any course has ≥ 2 rounds. */
+  mostPlayed: { title: string; count: number } | null;
 };
 
 // GolfCourseAPI addresses are "..., CITY, ST 12345, USA|United States".
@@ -54,11 +58,19 @@ export function computeStats(entries: CourseEntry[]): ClubhouseStats {
   let played = 0;
   let upcoming = 0;
   let bucketList = 0;
+  let rounds = 0;
+  let mostPlayed: { title: string; count: number } | null = null;
 
   for (const entry of entries) {
     if (entry.status === "played") played++;
     else if (entry.status === "upcoming") upcoming++;
     else if (entry.status === "bucket_list") bucketList++;
+
+    rounds += entry.rounds.length;
+    // Only surface a most-played course when it's been played more than once.
+    if (entry.rounds.length >= 2 && entry.rounds.length > (mostPlayed?.count ?? 1)) {
+      mostPlayed = { title: courseTitle(entry.course), count: entry.rounds.length };
+    }
 
     const state = extractState(entry.course.address);
     if (state) states.add(state);
@@ -73,5 +85,7 @@ export function computeStats(entries: CourseEntry[]): ClubhouseStats {
     bucketList,
     states: states.size,
     countries: countries.size,
+    rounds,
+    mostPlayed,
   };
 }

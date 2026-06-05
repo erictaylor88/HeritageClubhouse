@@ -19,7 +19,8 @@ type ActionResult = { ok: true } | { ok: false; error: string };
  * course must be cached first. We prefer the search-provided coordinates (no
  * API call) per the 50/day cap rules, and only fall back to the detail API when
  * the search result lacked coordinates. Entries are unique on (user_id,
- * course_id), so re-adding simply updates the status.
+ * course_id), so re-adding simply updates the status — individual plays are
+ * recorded separately via {@link addRound}.
  */
 export async function addCourseEntry(
   course: CourseSearchResult,
@@ -71,7 +72,7 @@ export async function addCourseEntry(
     };
   }
 
-  // 2. Upsert the entry (re-adding updates the status, preserves notes/score).
+  // 2. Upsert the entry (re-adding updates the status, preserves the note + rounds).
   const { error } = await supabase.from("course_entries").upsert(
     {
       user_id: user.id,
@@ -86,66 +87,16 @@ export async function addCourseEntry(
   return { ok: true };
 }
 
-/** Editable per-entry fields. Coordinates/status are handled elsewhere. */
-export type EntryEditFields = {
-  datePlayed: string | null;
-  bestScore: number | null;
-  notes: string | null;
-};
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+/**
+ * Update the course-level note on one of the signed-in user's entries. Date and
+ * score now live on rounds; the entry note is a course-level remark. RLS
+ * enforces ownership; the explicit `user_id` filter is defense-in-depth.
+ */
 const MAX_NOTES = 2000;
 
-/** Normalize + validate the editable fields, or return an error string. */
-function sanitizeEntryFields(
-  fields: EntryEditFields,
-): { ok: true; value: EntryEditFields } | { ok: false; error: string } {
-  // Date played: null, or a real YYYY-MM-DD that isn't in the future.
-  let datePlayed: string | null = null;
-  if (fields.datePlayed) {
-    const raw = fields.datePlayed.trim();
-    if (!ISO_DATE.test(raw)) return { ok: false, error: "Invalid date." };
-    const parsed = new Date(`${raw}T00:00:00Z`);
-    if (Number.isNaN(parsed.getTime()))
-      return { ok: false, error: "Invalid date." };
-    // Compare against today's UTC date; a "played" date can't be in the future.
-    const todayUtc = new Date().toISOString().slice(0, 10);
-    if (raw > todayUtc)
-      return { ok: false, error: "Date played can't be in the future." };
-    datePlayed = raw;
-  }
-
-  // Best score: null, or an integer in a sane golf range.
-  let bestScore: number | null = null;
-  if (fields.bestScore !== null && fields.bestScore !== undefined) {
-    const n = Number(fields.bestScore);
-    if (!Number.isInteger(n) || n < 1 || n > 300)
-      return { ok: false, error: "Best score must be a whole number (1–300)." };
-    bestScore = n;
-  }
-
-  // Notes: trim, cap length, collapse empty to null.
-  let notes: string | null = null;
-  if (typeof fields.notes === "string") {
-    const trimmed = fields.notes.trim();
-    if (trimmed.length > MAX_NOTES)
-      return { ok: false, error: `Notes must be ${MAX_NOTES} characters or fewer.` };
-    notes = trimmed.length > 0 ? trimmed : null;
-  }
-
-  return { ok: true, value: { datePlayed, bestScore, notes } };
-}
-
-/**
- * Update the editable fields (date played / best score / notes) on one of the
- * signed-in user's entries. RLS enforces ownership; the explicit `user_id`
- * filter is defense-in-depth. `updated_at` is bumped by the
- * `course_entries_set_updated_at` BEFORE UPDATE trigger (migration 002), so we
- * don't set it here.
- */
 export async function updateCourseEntry(
   entryId: string,
-  fields: EntryEditFields,
+  notes: string | null,
 ): Promise<ActionResult> {
   const supabase = await createClient();
   const {
@@ -154,17 +105,12 @@ export async function updateCourseEntry(
   if (!user) return { ok: false, error: "You're not signed in." };
   if (!entryId) return { ok: false, error: "Missing entry." };
 
-  const sanitized = sanitizeEntryFields(fields);
-  if (!sanitized.ok) return sanitized;
-  const { datePlayed, bestScore, notes } = sanitized.value;
+  const cleaned = sanitizeNotes(notes);
+  if (!cleaned.ok) return cleaned;
 
   const { error } = await supabase
     .from("course_entries")
-    .update({
-      date_played: datePlayed,
-      best_score: bestScore,
-      notes,
-    })
+    .update({ notes: cleaned.value })
     .eq("id", entryId)
     .eq("user_id", user.id); // defense-in-depth; RLS already enforces ownership
 
@@ -174,7 +120,7 @@ export async function updateCourseEntry(
   return { ok: true };
 }
 
-/** Remove one of the signed-in user's course entries. */
+/** Remove one of the signed-in user's course entries (cascade-deletes its rounds). */
 export async function removeCourseEntry(entryId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const {
@@ -188,6 +134,153 @@ export async function removeCourseEntry(entryId: string): Promise<ActionResult> 
     .eq("id", entryId)
     .eq("user_id", user.id); // defense-in-depth; RLS already enforces ownership
 
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/map");
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Rounds — individual plays of a course (the detail half of the split).
+// ---------------------------------------------------------------------------
+
+/** Editable per-round fields. */
+export type RoundFields = {
+  datePlayed: string | null;
+  score: number | null;
+  notes: string | null;
+};
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function sanitizeNotes(
+  notes: string | null,
+): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (typeof notes !== "string") return { ok: true, value: null };
+  const trimmed = notes.trim();
+  if (trimmed.length > MAX_NOTES)
+    return { ok: false, error: `Notes must be ${MAX_NOTES} characters or fewer.` };
+  return { ok: true, value: trimmed.length > 0 ? trimmed : null };
+}
+
+/** Normalize + validate a round's fields, or return an error string. */
+function sanitizeRoundFields(
+  fields: RoundFields,
+): { ok: true; value: RoundFields } | { ok: false; error: string } {
+  // Date played: null, or a real YYYY-MM-DD that isn't in the future.
+  let datePlayed: string | null = null;
+  if (fields.datePlayed) {
+    const raw = fields.datePlayed.trim();
+    if (!ISO_DATE.test(raw)) return { ok: false, error: "Invalid date." };
+    const parsed = new Date(`${raw}T00:00:00Z`);
+    if (Number.isNaN(parsed.getTime()))
+      return { ok: false, error: "Invalid date." };
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    if (raw > todayUtc)
+      return { ok: false, error: "Date played can't be in the future." };
+    datePlayed = raw;
+  }
+
+  // Score: null, or an integer in a sane golf range.
+  let score: number | null = null;
+  if (fields.score !== null && fields.score !== undefined) {
+    const n = Number(fields.score);
+    if (!Number.isInteger(n) || n < 1 || n > 300)
+      return { ok: false, error: "Score must be a whole number (1–300)." };
+    score = n;
+  }
+
+  const notes = sanitizeNotes(fields.notes);
+  if (!notes.ok) return notes;
+
+  return { ok: true, value: { datePlayed, score, notes: notes.value } };
+}
+
+/**
+ * Add a round to one of the signed-in user's course entries. We look the entry
+ * up server-side (verifying ownership) to source the denormalized course_id the
+ * `rounds` insert policy requires — the client only supplies the entry id.
+ */
+export async function addRound(
+  entryId: string,
+  fields: RoundFields,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "You're not signed in." };
+  if (!entryId) return { ok: false, error: "Missing entry." };
+
+  const sanitized = sanitizeRoundFields(fields);
+  if (!sanitized.ok) return sanitized;
+
+  // Source course_id from the owned entry (RLS scopes this to the user's rows).
+  const { data: entry, error: lookupError } = await supabase
+    .from("course_entries")
+    .select("course_id")
+    .eq("id", entryId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (lookupError) return { ok: false, error: lookupError.message };
+  if (!entry) return { ok: false, error: "Course not found." };
+
+  const { datePlayed, score, notes } = sanitized.value;
+  const { error } = await supabase.from("rounds").insert({
+    entry_id: entryId,
+    user_id: user.id,
+    course_id: entry.course_id,
+    date_played: datePlayed,
+    score,
+    notes,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/map");
+  return { ok: true };
+}
+
+/** Update the editable fields on one of the signed-in user's rounds. */
+export async function updateRound(
+  roundId: string,
+  fields: RoundFields,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "You're not signed in." };
+  if (!roundId) return { ok: false, error: "Missing round." };
+
+  const sanitized = sanitizeRoundFields(fields);
+  if (!sanitized.ok) return sanitized;
+  const { datePlayed, score, notes } = sanitized.value;
+
+  const { error } = await supabase
+    .from("rounds")
+    .update({ date_played: datePlayed, score, notes })
+    .eq("id", roundId)
+    .eq("user_id", user.id); // defense-in-depth; RLS already enforces ownership
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/map");
+  return { ok: true };
+}
+
+/** Remove one of the signed-in user's rounds. */
+export async function removeRound(roundId: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "You're not signed in." };
+  if (!roundId) return { ok: false, error: "Missing round." };
+
+  const { error } = await supabase
+    .from("rounds")
+    .delete()
+    .eq("id", roundId)
+    .eq("user_id", user.id); // defense-in-depth; RLS already enforces ownership
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/map");

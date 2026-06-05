@@ -8,27 +8,15 @@ import { PublicCourseList } from "@/components/public-course-list";
 import { ClubhouseStats } from "@/components/clubhouse-stats";
 import { computeStats } from "@/lib/stats";
 import { availableYears } from "@/lib/annual";
-import { type CourseEntry, type CourseStatus } from "@/lib/courses";
+import {
+  rowToCourseEntry,
+  type CourseEntry,
+  type EntryRow,
+} from "@/lib/courses";
 
 // Always re-query so the share gate reflects the live `is_shared` flag — a map
 // turned private must 404 immediately, never serve a stale cached copy.
 export const dynamic = "force-dynamic";
-
-type EntryRow = {
-  id: string;
-  status: string;
-  date_played: string | null;
-  best_score: number | null;
-  notes: string | null;
-  course_cache: {
-    course_id: string;
-    club_name: string | null;
-    course_name: string | null;
-    address: string | null;
-    lat: number;
-    lng: number;
-  } | null;
-};
 
 type SharedProfile = {
   id: string;
@@ -101,28 +89,14 @@ export default async function PublicMapPage({
   const { data: entryRows } = await admin
     .from("course_entries")
     .select(
-      "id, status, date_played, best_score, notes, course_cache(course_id, club_name, course_name, address, lat, lng)",
+      "id, status, notes, course_cache(course_id, club_name, course_name, address, lat, lng), rounds(id, date_played, score, notes)",
     )
     .eq("user_id", profile.id)
     .order("created_at", { ascending: false });
 
   const entries: CourseEntry[] = ((entryRows ?? []) as unknown as EntryRow[])
-    .filter((row) => row.course_cache !== null)
-    .map((row) => ({
-      id: row.id,
-      status: row.status as CourseStatus,
-      datePlayed: row.date_played,
-      bestScore: row.best_score,
-      notes: row.notes,
-      course: {
-        courseId: row.course_cache!.course_id,
-        clubName: row.course_cache!.club_name,
-        courseName: row.course_cache!.course_name,
-        address: row.course_cache!.address,
-        lat: row.course_cache!.lat,
-        lng: row.course_cache!.lng,
-      },
-    }));
+    .map(rowToCourseEntry)
+    .filter((e): e is CourseEntry => e !== null);
 
   const name = profile.display_name?.trim() || profile.username;
   const latestAnnual = availableYears(entries)[0] ?? null;

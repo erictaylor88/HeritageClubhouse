@@ -3,14 +3,26 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { removeCourseEntry, updateCourseEntry } from "@/app/map/actions";
+import {
+  addRound,
+  removeCourseEntry,
+  removeRound,
+  updateCourseEntry,
+  updateRound,
+  type RoundFields,
+} from "@/app/map/actions";
 import { useMapSelection } from "@/components/map-selection";
 import {
   COURSE_STATUSES,
   STATUS_META,
+  bestScore,
   courseTitle,
   formatDatePlayed,
+  lastPlayed,
+  roundCount,
+  roundsByDateDesc,
   type CourseEntry,
+  type Round,
 } from "@/lib/courses";
 import { StatusSwatch } from "@/components/status-chip";
 
@@ -73,43 +85,13 @@ function EntryItem({ entry }: { entry: CourseEntry }) {
     });
   }, [selected]);
 
-  // Edit-form state (strings for controlled inputs).
-  const [datePlayed, setDatePlayed] = useState(entry.datePlayed ?? "");
-  const [bestScore, setBestScore] = useState(
-    entry.bestScore !== null ? String(entry.bestScore) : "",
-  );
-  const [notes, setNotes] = useState(entry.notes ?? "");
-
   const isPlayed = entry.status === "played";
-  const hasDetails =
-    (isPlayed && (entry.datePlayed || entry.bestScore !== null)) ||
-    Boolean(entry.notes);
-
-  function startEdit() {
-    // Reset the form from the latest entry data, then open.
-    setDatePlayed(entry.datePlayed ?? "");
-    setBestScore(entry.bestScore !== null ? String(entry.bestScore) : "");
-    setNotes(entry.notes ?? "");
-    setError("");
-    setEditing(true);
-  }
-
-  function handleSave() {
-    setError("");
-    startTransition(async () => {
-      const result = await updateCourseEntry(entry.id, {
-        datePlayed: isPlayed && datePlayed ? datePlayed : null,
-        bestScore: isPlayed && bestScore !== "" ? Number(bestScore) : null,
-        notes,
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setEditing(false);
-      router.refresh();
-    });
-  }
+  const rounds = roundsByDateDesc(entry.rounds);
+  const last = lastPlayed(entry);
+  const best = bestScore(entry);
+  const plays = roundCount(entry);
+  const hasPlayMeta = isPlayed && (last !== null || best !== null);
+  const hasViewMeta = hasPlayMeta || Boolean(entry.notes);
 
   function handleRemove() {
     setError("");
@@ -157,7 +139,10 @@ function EntryItem({ entry }: { entry: CourseEntry }) {
           </button>
           <button
             type="button"
-            onClick={() => (editing ? setEditing(false) : startEdit())}
+            onClick={() => {
+              setError("");
+              setEditing((v) => !v);
+            }}
             disabled={pending}
             className="text-[var(--ink-muted)] underline-offset-2 hover:text-[var(--brass-deep)] hover:underline disabled:opacity-50"
           >
@@ -175,20 +160,15 @@ function EntryItem({ entry }: { entry: CourseEntry }) {
         </div>
       </div>
 
-      {/* View-mode details (date / score / notes). */}
-      {!editing && hasDetails && (
+      {/* View-mode summary: derived play meta + the course note. */}
+      {!editing && hasViewMeta && (
         <div className="mt-1.5 flex flex-col gap-1">
-          {isPlayed && (entry.datePlayed || entry.bestScore !== null) && (
+          {hasPlayMeta && (
             <p className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.08em] text-[var(--ink-muted)]">
-              {entry.datePlayed && (
-                <span>Played {formatDatePlayed(entry.datePlayed)}</span>
-              )}
-              {entry.datePlayed && entry.bestScore !== null && (
-                <span> · </span>
-              )}
-              {entry.bestScore !== null && (
-                <span>Best {entry.bestScore}</span>
-              )}
+              {last && <span>Played {formatDatePlayed(last)}</span>}
+              {last && best !== null && <span> · </span>}
+              {best !== null && <span>Best {best}</span>}
+              {plays > 1 && <span> · {plays} rounds</span>}
             </p>
           )}
           {entry.notes && (
@@ -199,81 +179,18 @@ function EntryItem({ entry }: { entry: CourseEntry }) {
         </div>
       )}
 
-      {/* Edit-mode form. */}
+      {/* Edit-mode panel: manage rounds (played only) + the course note. */}
       {editing && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSave();
-          }}
-          className="mt-3 flex flex-col gap-3 border-t border-[var(--line)] pt-3"
-        >
+        <div className="mt-3 flex flex-col gap-4 border-t border-[var(--line)] pt-3">
           {isPlayed && (
-            <div className="flex gap-3">
-              <label className="flex flex-1 flex-col gap-1">
-                <span className="font-[family-name:var(--font-mono)] text-[0.7rem] uppercase tracking-[0.12em] text-[var(--ink-muted)]">
-                  Date played
-                </span>
-                <input
-                  type="date"
-                  value={datePlayed}
-                  max={new Date().toISOString().slice(0, 10)}
-                  onChange={(e) => setDatePlayed(e.target.value)}
-                  className="rounded-md border border-[var(--line)] bg-[var(--paper)] px-2 py-1 text-sm text-[var(--ink)] outline-none focus:border-[var(--brass)]"
-                />
-              </label>
-              <label className="flex w-24 flex-col gap-1">
-                <span className="font-[family-name:var(--font-mono)] text-[0.7rem] uppercase tracking-[0.12em] text-[var(--ink-muted)]">
-                  Best score
-                </span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  max={300}
-                  value={bestScore}
-                  onChange={(e) => setBestScore(e.target.value)}
-                  placeholder="—"
-                  className="rounded-md border border-[var(--line)] bg-[var(--paper)] px-2 py-1 text-sm text-[var(--ink)] outline-none focus:border-[var(--brass)]"
-                />
-              </label>
-            </div>
-          )}
-
-          <label className="flex flex-col gap-1">
-            <span className="font-[family-name:var(--font-mono)] text-[0.7rem] uppercase tracking-[0.12em] text-[var(--ink-muted)]">
-              Notes
-            </span>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              maxLength={2000}
-              placeholder="A memory, conditions, who you played with…"
-              className="resize-y rounded-md border border-[var(--line)] bg-[var(--paper)] px-2 py-1.5 text-sm text-[var(--ink)] outline-none focus:border-[var(--brass)]"
+            <RoundsManager
+              entryId={entry.id}
+              rounds={rounds}
+              onChanged={() => router.refresh()}
             />
-          </label>
-
-          {error && <p className="text-xs text-[var(--oxblood)]">{error}</p>}
-
-          <div className="flex items-center gap-2">
-            <button
-              type="submit"
-              disabled={pending}
-              className="rounded-md bg-[var(--forest)] px-3 py-1.5 text-xs font-medium text-[var(--paper)] transition-colors hover:bg-[var(--forest-mid)] disabled:opacity-50"
-            >
-              {pending ? "Saving…" : "Save"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditing(false)}
-              disabled={pending}
-              className="rounded-md border border-[var(--line)] px-3 py-1.5 text-xs text-[var(--ink-muted)] transition-colors hover:bg-[var(--paper-sunk)] disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
+          )}
+          <CourseNoteForm entry={entry} onSaved={() => router.refresh()} />
+        </div>
       )}
 
       {/* Remove error surfaced in view mode. */}
@@ -281,5 +198,329 @@ function EntryItem({ entry }: { entry: CourseEntry }) {
         <p className="mt-1.5 text-xs text-[var(--oxblood)]">{error}</p>
       )}
     </li>
+  );
+}
+
+/** The rounds list + add-a-round affordance for a played course. */
+function RoundsManager({
+  entryId,
+  rounds,
+  onChanged,
+}: {
+  entryId: string;
+  rounds: Round[];
+  onChanged: () => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+
+  function handleAdd(fields: RoundFields) {
+    setError("");
+    startTransition(async () => {
+      const result = await addRound(entryId, fields);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setAdding(false);
+      onChanged();
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="font-[family-name:var(--font-mono)] text-[0.7rem] uppercase tracking-[0.12em] text-[var(--ink-muted)]">
+          Rounds{rounds.length > 0 && ` · ${rounds.length}`}
+        </span>
+        {!adding && (
+          <button
+            type="button"
+            onClick={() => {
+              setError("");
+              setAdding(true);
+            }}
+            className="font-[family-name:var(--font-mono)] text-[0.7rem] uppercase tracking-[0.1em] text-[var(--brass-deep)] underline-offset-2 hover:underline"
+          >
+            + Add a round
+          </button>
+        )}
+      </div>
+
+      {rounds.length === 0 && !adding && (
+        <p className="text-xs text-[var(--ink-muted)]">
+          No rounds logged yet — add one to record a date and score.
+        </p>
+      )}
+
+      <ul className="flex flex-col gap-1.5">
+        {rounds.map((round) => (
+          <RoundRow key={round.id} round={round} onChanged={onChanged} />
+        ))}
+      </ul>
+
+      {adding && (
+        <RoundForm
+          submitLabel="Add round"
+          pending={pending}
+          defaultToToday
+          onSubmit={handleAdd}
+          onCancel={() => setAdding(false)}
+        />
+      )}
+
+      {error && <p className="text-xs text-[var(--oxblood)]">{error}</p>}
+    </div>
+  );
+}
+
+/** One round: a compact view row that flips into an edit form. */
+function RoundRow({
+  round,
+  onChanged,
+}: {
+  round: Round;
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+
+  function handleSave(fields: RoundFields) {
+    setError("");
+    startTransition(async () => {
+      const result = await updateRound(round.id, fields);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setEditing(false);
+      onChanged();
+    });
+  }
+
+  function handleRemove() {
+    setError("");
+    startTransition(async () => {
+      const result = await removeRound(round.id);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      onChanged();
+    });
+  }
+
+  if (editing) {
+    return (
+      <li className="rounded-md border border-[var(--line)] bg-[var(--paper)] px-2.5 py-2">
+        <RoundForm
+          submitLabel="Save"
+          pending={pending}
+          initial={round}
+          onSubmit={handleSave}
+          onCancel={() => setEditing(false)}
+        />
+        {error && <p className="mt-1.5 text-xs text-[var(--oxblood)]">{error}</p>}
+      </li>
+    );
+  }
+
+  const hasMeta = round.datePlayed || round.score !== null;
+  return (
+    <li className="flex items-start justify-between gap-3 rounded-md border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1.5">
+      <div className="min-w-0">
+        <p className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.06em] text-[var(--ink)] tabular-nums">
+          {round.datePlayed ? formatDatePlayed(round.datePlayed) : "Undated"}
+          {round.score !== null && (
+            <span className="text-[var(--ink-muted)]"> · {round.score}</span>
+          )}
+          {!hasMeta && <span className="text-[var(--ink-muted)]"> round</span>}
+        </p>
+        {round.notes && (
+          <p className="mt-0.5 truncate text-xs italic text-[var(--ink-muted)]">
+            {round.notes}
+          </p>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-2 text-[0.7rem]">
+        <button
+          type="button"
+          onClick={() => {
+            setError("");
+            setEditing(true);
+          }}
+          disabled={pending}
+          className="text-[var(--ink-muted)] underline-offset-2 hover:text-[var(--brass-deep)] hover:underline disabled:opacity-50"
+        >
+          Edit
+        </button>
+        <button
+          type="button"
+          onClick={handleRemove}
+          disabled={pending}
+          className="text-[var(--ink-muted)] underline-offset-2 hover:text-[var(--oxblood)] hover:underline disabled:opacity-50"
+          aria-label="Remove round"
+        >
+          {pending ? "…" : "Remove"}
+        </button>
+      </div>
+    </li>
+  );
+}
+
+/** Shared add/edit form for a round's date / score / notes. */
+function RoundForm({
+  submitLabel,
+  pending,
+  initial,
+  defaultToToday = false,
+  onSubmit,
+  onCancel,
+}: {
+  submitLabel: string;
+  pending: boolean;
+  initial?: Round;
+  defaultToToday?: boolean;
+  onSubmit: (fields: RoundFields) => void;
+  onCancel: () => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [datePlayed, setDatePlayed] = useState(
+    initial?.datePlayed ?? (defaultToToday ? today : ""),
+  );
+  const [score, setScore] = useState(
+    initial?.score != null ? String(initial.score) : "",
+  );
+  const [notes, setNotes] = useState(initial?.notes ?? "");
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit({
+          datePlayed: datePlayed || null,
+          score: score !== "" ? Number(score) : null,
+          notes,
+        });
+      }}
+      className="flex flex-col gap-2"
+    >
+      <div className="flex gap-2">
+        <label className="flex flex-1 flex-col gap-1">
+          <span className="font-[family-name:var(--font-mono)] text-[0.65rem] uppercase tracking-[0.12em] text-[var(--ink-muted)]">
+            Date played
+          </span>
+          <input
+            type="date"
+            value={datePlayed}
+            max={today}
+            onChange={(e) => setDatePlayed(e.target.value)}
+            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-sm text-[var(--ink)] outline-none focus:border-[var(--brass)]"
+          />
+        </label>
+        <label className="flex w-20 flex-col gap-1">
+          <span className="font-[family-name:var(--font-mono)] text-[0.65rem] uppercase tracking-[0.12em] text-[var(--ink-muted)]">
+            Score
+          </span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={300}
+            value={score}
+            onChange={(e) => setScore(e.target.value)}
+            placeholder="—"
+            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-sm text-[var(--ink)] outline-none focus:border-[var(--brass)]"
+          />
+        </label>
+      </div>
+      <label className="flex flex-col gap-1">
+        <span className="font-[family-name:var(--font-mono)] text-[0.65rem] uppercase tracking-[0.12em] text-[var(--ink-muted)]">
+          Round notes
+        </span>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          maxLength={2000}
+          placeholder="Conditions, who you played with, a memory…"
+          className="resize-y rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5 text-sm text-[var(--ink)] outline-none focus:border-[var(--brass)]"
+        />
+      </label>
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-md bg-[var(--forest)] px-3 py-1.5 text-xs font-medium text-[var(--paper)] transition-colors hover:bg-[var(--forest-mid)] disabled:opacity-50"
+        >
+          {pending ? "Saving…" : submitLabel}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={pending}
+          className="rounded-md border border-[var(--line)] px-3 py-1.5 text-xs text-[var(--ink-muted)] transition-colors hover:bg-[var(--paper-sunk)] disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** Course-level note editor (status-agnostic). */
+function CourseNoteForm({
+  entry,
+  onSaved,
+}: {
+  entry: CourseEntry;
+  onSaved: () => void;
+}) {
+  const [notes, setNotes] = useState(entry.notes ?? "");
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+  const dirty = (entry.notes ?? "") !== notes.trim();
+
+  function handleSave() {
+    setError("");
+    startTransition(async () => {
+      const result = await updateCourseEntry(entry.id, notes);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      onSaved();
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="flex flex-col gap-1">
+        <span className="font-[family-name:var(--font-mono)] text-[0.7rem] uppercase tracking-[0.12em] text-[var(--ink-muted)]">
+          Course note
+        </span>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          maxLength={2000}
+          placeholder="A note about this course…"
+          className="resize-y rounded-md border border-[var(--line)] bg-[var(--paper)] px-2 py-1.5 text-sm text-[var(--ink)] outline-none focus:border-[var(--brass)]"
+        />
+      </label>
+      {error && <p className="text-xs text-[var(--oxblood)]">{error}</p>}
+      <div>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={pending || !dirty}
+          className="rounded-md bg-[var(--forest)] px-3 py-1.5 text-xs font-medium text-[var(--paper)] transition-colors hover:bg-[var(--forest-mid)] disabled:opacity-50"
+        >
+          {pending ? "Saving…" : "Save note"}
+        </button>
+      </div>
+    </div>
   );
 }

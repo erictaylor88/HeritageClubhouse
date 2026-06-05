@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { computeAnnual, yearOf } from "@/lib/annual";
+import { rowToCourseEntry, type CourseEntry, type EntryRow } from "@/lib/courses";
+import { computeAnnual } from "@/lib/annual";
 
 // A shared map turned private must not leak a real OG card; always re-query.
 export const dynamic = "force-dynamic";
@@ -47,7 +48,12 @@ async function loadFont(
   }
 }
 
-type AnnualCard = { name: string; year: number; courses: number; states: number } | null;
+type AnnualCard = {
+  name: string;
+  year: number;
+  rounds: number;
+  courses: number;
+} | null;
 
 async function getAnnualCard(slug: string, yearParam: string): Promise<AnnualCard> {
   try {
@@ -64,41 +70,23 @@ async function getAnnualCard(slug: string, yearParam: string): Promise<AnnualCar
 
     const { data: rows } = await admin
       .from("course_entries")
-      .select("status, date_played, course_cache(address)")
+      .select(
+        "id, status, notes, course_cache(course_id, club_name, course_name, address, lat, lng), rounds(id, date_played, score, notes)",
+      )
       .eq("user_id", profile.id);
 
-    // Reuse the same year/stats logic as the page (no map fields needed here).
-    const entries = ((rows ?? []) as unknown as {
-      status: string;
-      date_played: string | null;
-      course_cache: { address: string | null } | null;
-    }[])
-      .filter((r) => r.course_cache !== null)
-      .map((r) => ({
-        id: "",
-        status: r.status as "played" | "upcoming" | "bucket_list",
-        datePlayed: r.date_played,
-        bestScore: null,
-        notes: null,
-        course: {
-          courseId: "",
-          clubName: null,
-          courseName: null,
-          address: r.course_cache!.address,
-          lat: 0,
-          lng: 0,
-        },
-      }));
+    // Reuse the same rounds-based year/stats logic as the page.
+    const entries = ((rows ?? []) as unknown as EntryRow[])
+      .map(rowToCourseEntry)
+      .filter((e): e is CourseEntry => e !== null);
 
-    if (!entries.some((e) => e.status === "played" && yearOf(e.datePlayed) === year)) {
-      return null;
-    }
     const annual = computeAnnual(entries, year);
+    if (annual.roundCount === 0) return null;
     return {
       name: profile.display_name?.trim() || profile.username,
       year,
+      rounds: annual.roundCount,
       courses: annual.courses,
-      states: annual.states,
     };
   } catch {
     return null;
@@ -115,15 +103,18 @@ export default async function Image({
 
   // Generic, non-identifying card when the slug/year isn't a live shared Annual.
   const title = card ? `${card.name}’s ${card.year}` : "The Annual";
+  const roundLine = card
+    ? card.rounds === 1
+      ? "1 round"
+      : `${card.rounds} rounds`
+    : "A year in golf";
   const courseLine = card
     ? card.courses === 1
       ? "1 course"
       : `${card.courses} courses`
-    : "A year in golf";
+    : null;
   const subtitle =
-    card && card.states > 0
-      ? `${courseLine} · ${card.states} ${card.states === 1 ? "state" : "states"}`
-      : courseLine;
+    card && courseLine ? `${roundLine} · ${courseLine}` : roundLine;
 
   // One serif for the whole card (on-brand editorial Logbook look). Subset to a
   // full ASCII range + the dynamic title so every glyph drawn is covered — an

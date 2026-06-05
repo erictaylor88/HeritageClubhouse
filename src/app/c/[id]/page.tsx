@@ -12,7 +12,9 @@ import {
   courseTitle,
   formatDatePlayed,
   isCourseStatus,
+  roundsByDateDesc,
   type CourseStatus,
+  type Round,
 } from "@/lib/courses";
 import { Scorecard } from "@/components/scorecard";
 import { StatusChip } from "@/components/status-chip";
@@ -57,10 +59,11 @@ export default async function CourseScorecardPage({
     // GolfApiError (incl. missing key): just render without the scorecard.
   }
 
-  // The signed-in user's own log for this course, if any.
+  // The signed-in user's own log for this course, if any: the entry header
+  // (status + course note) plus every recorded round.
   const { data: entryRow } = await supabase
     .from("course_entries")
-    .select("status, date_played, best_score, notes")
+    .select("status, notes, rounds(id, date_played, score, notes)")
     .eq("user_id", user.id)
     .eq("course_id", courseId)
     .maybeSingle();
@@ -72,6 +75,20 @@ export default async function CourseScorecardPage({
   });
   const status: CourseStatus | null =
     entryRow && isCourseStatus(entryRow.status) ? entryRow.status : null;
+  const rounds: Round[] = roundsByDateDesc(
+    ((entryRow?.rounds ?? []) as {
+      id: string;
+      date_played: string | null;
+      score: number | null;
+      notes: string | null;
+    }[]).map((r) => ({
+      id: r.id,
+      datePlayed: r.date_played,
+      score: r.score,
+      notes: r.notes,
+    })),
+  );
+  const courseNote = entryRow?.notes ?? null;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -103,26 +120,36 @@ export default async function CourseScorecardPage({
           )}
         </div>
 
-        {/* The user's own log (date / score / notes) */}
-        {status && (entryRow?.date_played || entryRow?.best_score !== null || entryRow?.notes) && (
-          <div className="mt-5 flex flex-col gap-1.5 rounded-md border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
-            {(entryRow?.date_played || entryRow?.best_score !== null) && (
-              <p className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.08em] text-[var(--ink-muted)]">
-                {entryRow?.date_played && (
-                  <span>Played {formatDatePlayed(entryRow.date_played)}</span>
-                )}
-                {entryRow?.date_played && entryRow?.best_score !== null && (
-                  <span> · </span>
-                )}
-                {entryRow?.best_score !== null && (
-                  <span>Best {entryRow?.best_score}</span>
-                )}
-              </p>
+        {/* The user's own log: course note + each recorded round (newest first). */}
+        {status && (courseNote || rounds.length > 0) && (
+          <div className="mt-5 flex flex-col gap-3 rounded-md border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
+            {courseNote && (
+              <p className="text-sm italic text-[var(--ink-muted)]">{courseNote}</p>
             )}
-            {entryRow?.notes && (
-              <p className="text-sm italic text-[var(--ink-muted)]">
-                {entryRow.notes}
-              </p>
+            {rounds.length > 0 && (
+              <ul className="flex flex-col gap-2">
+                {rounds.map((round) => (
+                  <li
+                    key={round.id}
+                    className="flex flex-col gap-0.5 border-t border-[var(--line)] pt-2 first:border-t-0 first:pt-0"
+                  >
+                    {(round.datePlayed || round.score !== null) && (
+                      <p className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.08em] text-[var(--ink-muted)]">
+                        {round.datePlayed && (
+                          <span>Played {formatDatePlayed(round.datePlayed)}</span>
+                        )}
+                        {round.datePlayed && round.score !== null && <span> · </span>}
+                        {round.score !== null && <span>Score {round.score}</span>}
+                      </p>
+                    )}
+                    {round.notes && (
+                      <p className="text-sm italic text-[var(--ink-muted)]">
+                        {round.notes}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         )}

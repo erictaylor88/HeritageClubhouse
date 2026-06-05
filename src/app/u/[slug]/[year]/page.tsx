@@ -4,10 +4,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  courseTitle,
   formatDatePlayed,
+  rowToCourseEntry,
   type CourseEntry,
-  type CourseStatus,
+  type EntryRow,
 } from "@/lib/courses";
 import { computeAnnual } from "@/lib/annual";
 
@@ -18,22 +18,6 @@ export const dynamic = "force-dynamic";
 // Reasonable bounds; anything outside is a junk URL → 404 (keeps it un-indexable).
 const MIN_YEAR = 2000;
 const MAX_YEAR = 2100;
-
-type EntryRow = {
-  id: string;
-  status: string;
-  date_played: string | null;
-  best_score: number | null;
-  notes: string | null;
-  course_cache: {
-    course_id: string;
-    club_name: string | null;
-    course_name: string | null;
-    address: string | null;
-    lat: number;
-    lng: number;
-  } | null;
-};
 
 type SharedProfile = {
   id: string;
@@ -75,27 +59,13 @@ const getEntries = cache(async function getEntries(
   const { data: entryRows } = await admin
     .from("course_entries")
     .select(
-      "id, status, date_played, best_score, notes, course_cache(course_id, club_name, course_name, address, lat, lng)",
+      "id, status, notes, course_cache(course_id, club_name, course_name, address, lat, lng), rounds(id, date_played, score, notes)",
     )
     .eq("user_id", userId);
 
   return ((entryRows ?? []) as unknown as EntryRow[])
-    .filter((row) => row.course_cache !== null)
-    .map((row) => ({
-      id: row.id,
-      status: row.status as CourseStatus,
-      datePlayed: row.date_played,
-      bestScore: row.best_score,
-      notes: row.notes,
-      course: {
-        courseId: row.course_cache!.course_id,
-        clubName: row.course_cache!.club_name,
-        courseName: row.course_cache!.course_name,
-        address: row.course_cache!.address,
-        lat: row.course_cache!.lat,
-        lng: row.course_cache!.lng,
-      },
-    }));
+    .map(rowToCourseEntry)
+    .filter((e): e is CourseEntry => e !== null);
 });
 
 export async function generateMetadata({
@@ -179,13 +149,13 @@ export default async function AnnualPage({
           </p>
         </div>
 
-        {annual.courses === 0 ? (
+        {annual.roundCount === 0 ? (
           <div className="mt-12 rounded-md border border-dashed border-[var(--line)] px-4 py-10 text-center">
             <p className="font-[family-name:var(--font-display)] text-lg text-[var(--ink)]">
               No rounds recorded in {year}.
             </p>
             <p className="mt-1 text-sm text-[var(--ink-muted)]">
-              Courses appear here once they&apos;re logged with a play date in {year}.
+              Rounds appear here once they&apos;re logged with a play date in {year}.
             </p>
           </div>
         ) : (
@@ -194,16 +164,16 @@ export default async function AnnualPage({
             <dl className="mt-12 grid grid-cols-3 gap-px overflow-hidden rounded-md border border-[var(--line)] bg-[var(--line)]">
               {[
                 {
+                  label: annual.roundCount === 1 ? "Round" : "Rounds",
+                  value: annual.roundCount,
+                },
+                {
                   label: annual.courses === 1 ? "Course" : "Courses",
                   value: annual.courses,
                 },
                 {
                   label: annual.states === 1 ? "State" : "States",
                   value: annual.states,
-                },
-                {
-                  label: annual.countries === 1 ? "Country" : "Countries",
-                  value: annual.countries,
                 },
               ].map((cell) => (
                 <div
@@ -226,23 +196,23 @@ export default async function AnnualPage({
                 The rounds
               </h2>
               <ol className="mt-4 flex flex-col">
-                {annual.entries.map((entry) => (
+                {annual.rounds.map((round) => (
                   <li
-                    key={entry.id}
+                    key={round.id}
                     className="flex items-baseline gap-4 border-t border-[var(--line)] py-3 first:border-t-0"
                   >
                     <span className="w-28 shrink-0 font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.06em] text-[var(--ink-muted)] tabular-nums">
-                      {formatDatePlayed(entry.datePlayed!)}
+                      {formatDatePlayed(round.date)}
                     </span>
                     <Link
-                      href={`/c/${entry.course.courseId}`}
+                      href={`/c/${round.courseId}`}
                       className="flex-1 font-[family-name:var(--font-display)] text-[15px] text-[var(--ink)] underline-offset-4 hover:text-[var(--brass-deep)] hover:underline"
                     >
-                      {courseTitle(entry.course)}
+                      {round.title}
                     </Link>
-                    {entry.bestScore !== null && (
+                    {round.score !== null && (
                       <span className="shrink-0 font-[family-name:var(--font-mono)] text-xs text-[var(--ink-muted)] tabular-nums">
-                        {entry.bestScore}
+                        {round.score}
                       </span>
                     )}
                   </li>

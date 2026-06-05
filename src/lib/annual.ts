@@ -1,30 +1,44 @@
 /**
- * "The Annual" — a year-in-review over a user's course entries. Pure +
+ * "The Annual" — a year-in-review over a user's recorded rounds. Pure +
  * client-safe (no server deps), like {@link computeStats}. FREE tier: keyed on
- * `date_played`, which we already store — no GolfCourseAPI enrichment needed.
+ * each round's `date_played`, which we already store — no GolfCourseAPI
+ * enrichment needed.
  *
- * Each user has at most one entry per course (DB-unique on user+course), so a
- * year's "played" set is the courses whose entry carries a `date_played` in that
- * year. Entries without a play date can't be placed in a year and are excluded —
- * that's the whole reason play-date backfill gated this feature.
+ * A year's set is every ROUND whose `date_played` falls in that year (not every
+ * entry) — so a course played three times in a year shows three lines. Rounds
+ * without a date can't be placed in a year and are excluded; courses with no
+ * rounds (incl. upcoming/bucket_list) never appear.
  */
 
 import { courseTitle, type CourseEntry } from "@/lib/courses";
 import { computeStats } from "@/lib/stats";
 
+/** One dated play, flattened with its course context for the recap list. */
+export type AnnualRound = {
+  /** Stable React key — the round's id. */
+  id: string;
+  courseId: string;
+  title: string;
+  /** Non-null ISO date (YYYY-MM-DD); only dated rounds reach this type. */
+  date: string;
+  score: number | null;
+};
+
 export type Annual = {
   year: number;
-  /** Courses marked played with a date in this year (== entries.length). */
+  /** This year's dated rounds, chronological (earliest first). */
+  rounds: AnnualRound[];
+  /** Total rounds played this year (== rounds.length). */
+  roundCount: number;
+  /** Distinct courses played this year. */
   courses: number;
   /** Distinct US states across this year's courses. */
   states: number;
   /** Distinct countries across this year's courses. */
   countries: number;
-  /** This year's played entries, chronological (earliest first). */
-  entries: CourseEntry[];
-  /** Earliest and latest course played this year, for the recap line. */
-  first: { title: string; date: string } | null;
-  last: { title: string; date: string } | null;
+  /** Earliest and latest round played this year, for the recap line. */
+  first: AnnualRound | null;
+  last: AnnualRound | null;
 };
 
 /** Parse the year out of a stored `date_played` (YYYY-MM-DD); null if absent. */
@@ -34,38 +48,53 @@ export function yearOf(iso: string | null): number | null {
   return Number.isInteger(y) && y >= 1900 ? y : null;
 }
 
-/** Descending list of years that have at least one played round with a date. */
+/** Descending list of years that have at least one dated round. */
 export function availableYears(entries: CourseEntry[]): number[] {
   const years = new Set<number>();
   for (const e of entries) {
-    if (e.status !== "played") continue;
-    const y = yearOf(e.datePlayed);
-    if (y) years.add(y);
+    for (const r of e.rounds) {
+      const y = yearOf(r.datePlayed);
+      if (y) years.add(y);
+    }
   }
   return [...years].sort((a, b) => b - a);
 }
 
 export function computeAnnual(entries: CourseEntry[], year: number): Annual {
-  const yearEntries = entries
-    .filter((e) => e.status === "played" && yearOf(e.datePlayed) === year)
-    // datePlayed is a non-null ISO string here (filtered above); ISO sorts lexically.
-    .sort((a, b) => (a.datePlayed! < b.datePlayed! ? -1 : a.datePlayed! > b.datePlayed! ? 1 : 0));
+  const rounds: AnnualRound[] = [];
+  // Track which entries contributed a round this year, to count distinct
+  // courses + reuse the address parsing in computeStats over just that subset.
+  const courseEntries = new Map<string, CourseEntry>();
 
-  // Reuse the address parsing in computeStats over just this year's subset.
-  const { states, countries } = computeStats(yearEntries);
+  for (const entry of entries) {
+    let contributed = false;
+    for (const r of entry.rounds) {
+      if (yearOf(r.datePlayed) !== year) continue;
+      rounds.push({
+        id: r.id,
+        courseId: entry.course.courseId,
+        title: courseTitle(entry.course),
+        date: r.datePlayed!, // non-null: yearOf returned a year
+        score: r.score,
+      });
+      contributed = true;
+    }
+    if (contributed) courseEntries.set(entry.course.courseId, entry);
+  }
 
-  const toMark = (e: CourseEntry) => ({
-    title: courseTitle(e.course),
-    date: e.datePlayed!,
-  });
+  // Chronological; ISO dates sort lexically. Ties keep insertion order.
+  rounds.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  const { states, countries } = computeStats([...courseEntries.values()]);
 
   return {
     year,
-    courses: yearEntries.length,
+    rounds,
+    roundCount: rounds.length,
+    courses: courseEntries.size,
     states,
     countries,
-    entries: yearEntries,
-    first: yearEntries.length ? toMark(yearEntries[0]) : null,
-    last: yearEntries.length ? toMark(yearEntries[yearEntries.length - 1]) : null,
+    first: rounds.length ? rounds[0] : null,
+    last: rounds.length ? rounds[rounds.length - 1] : null,
   };
 }
