@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { NormalizedCourse } from "@/lib/golf/api";
+import { getCourseDetail, type NormalizedCourse } from "@/lib/golf/api";
+import { isEnriched } from "@/lib/golf/scorecard";
 
 /**
  * `course_cache` write-through helpers. SERVER ONLY (uses the service-role
@@ -16,6 +17,9 @@ export type CachedCourse = {
   lng: number;
   cached_at: string;
 };
+
+/** A cached course plus its full `raw` API payload (for the scorecard view). */
+export type CachedCourseWithRaw = CachedCourse & { raw: unknown };
 
 /** Returns the cached course, or null on a cache miss. Cache-first always. */
 export async function getCachedCourse(
@@ -68,4 +72,48 @@ export async function upsertCourseCache(
     throw new Error(`course_cache write failed: ${error.message}`);
   }
   return data as CachedCourse;
+}
+
+/** Like {@link getCachedCourse} but also selects the full `raw` payload. */
+export async function getCachedCourseWithRaw(
+  courseId: string,
+): Promise<CachedCourseWithRaw | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("course_cache")
+    .select("course_id, club_name, course_name, address, lat, lng, raw, cached_at")
+    .eq("course_id", courseId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`course_cache read failed: ${error.message}`);
+  }
+  return data as CachedCourseWithRaw | null;
+}
+
+/**
+ * Lazily enrich a cached course with full scorecard detail (tees, ratings,
+ * per-hole par/yardage/handicap), written through to `course_cache.raw`.
+ *
+ * Cap discipline (CLAUDE.md hard rule #3): one detail call per course, EVER —
+ * if the row is already enriched (`raw.tees` present) we return it without
+ * touching the API. Never bulk-enrich; this fires only on a deep-view of a
+ * single course. Propagates `GolfApiRateLimitError`/`GolfApiError` so callers
+ * can soft-fail and serve whatever's cached.
+ */
+export async function enrichCourse(
+  courseId: string,
+): Promise<CachedCourseWithRaw | null> {
+  const existing = await getCachedCourseWithRaw(courseId);
+
+  // Already enriched → no API call.
+  if (existing && isEnriched(existing.raw)) return existing;
+
+  // Cache miss or search-result-only row → fetch detail + write through.
+  const detail = await getCourseDetail(courseId);
+  if (!detail) return existing;
+
+  const stored = await upsertCourseCache(detail);
+  if (!stored) return existing; // detail lacked coords; keep what we had
+  return { ...stored, raw: detail.raw };
 }

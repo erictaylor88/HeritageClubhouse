@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { removeCourseEntry, updateCourseEntry } from "@/app/map/actions";
 import {
@@ -110,9 +111,12 @@ function EntryItem({ entry }: { entry: CourseEntry }) {
     <li className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate font-[family-name:var(--font-display)] text-[17px] font-medium leading-snug text-[var(--ink)]">
+          <Link
+            href={`/c/${entry.course.courseId}`}
+            className="block truncate font-[family-name:var(--font-display)] text-[17px] font-medium leading-snug text-[var(--ink)] underline-offset-2 hover:text-[var(--brass-deep)] hover:underline"
+          >
             {courseTitle(entry.course)}
-          </p>
+          </Link>
           {entry.course.address && (
             <p className="truncate text-xs text-[var(--ink-muted)]">
               {entry.course.address}
