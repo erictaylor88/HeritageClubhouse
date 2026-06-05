@@ -7,6 +7,7 @@ import { MapCanvas } from "@/components/map-canvas";
 import { PublicCourseList } from "@/components/public-course-list";
 import { ClubhouseStats } from "@/components/clubhouse-stats";
 import { computeStats } from "@/lib/stats";
+import { availableYears } from "@/lib/annual";
 import { type CourseEntry, type CourseStatus } from "@/lib/courses";
 
 // Always re-query so the share gate reflects the live `is_shared` flag — a map
@@ -124,6 +125,7 @@ export default async function PublicMapPage({
     }));
 
   const name = profile.display_name?.trim() || profile.username;
+  const latestAnnual = availableYears(entries)[0] ?? null;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -159,6 +161,25 @@ export default async function PublicMapPage({
           </div>
 
           <ClubhouseStats stats={computeStats(entries)} />
+
+          {latestAnnual && (
+            <Link
+              href={`/u/${slug.toLowerCase()}/${latestAnnual}`}
+              className="group flex items-center justify-between rounded-md border border-[var(--line)] bg-[var(--surface)] px-4 py-3 transition-colors hover:border-[var(--brass)]"
+            >
+              <span className="flex flex-col">
+                <span className="font-[family-name:var(--font-mono)] text-[0.65rem] uppercase tracking-[0.14em] text-[var(--brass-deep)]">
+                  The Annual
+                </span>
+                <span className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-[var(--ink)]">
+                  {latestAnnual} in golf
+                </span>
+              </span>
+              <span className="font-[family-name:var(--font-mono)] text-sm text-[var(--ink-muted)] transition-transform group-hover:translate-x-0.5">
+                →
+              </span>
+            </Link>
+          )}
 
           <div className="flex flex-col gap-3">
             <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-[var(--forest)]">

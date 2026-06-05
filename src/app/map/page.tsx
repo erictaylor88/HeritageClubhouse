@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
@@ -5,6 +6,7 @@ import { CourseSearch } from "@/components/course-search";
 import { CourseList } from "@/components/course-list";
 import { ClubhouseStats } from "@/components/clubhouse-stats";
 import { computeStats } from "@/lib/stats";
+import { availableYears } from "@/lib/annual";
 import { MapCanvas } from "@/components/map-canvas";
 import { MapWorkspace } from "@/components/map-workspace";
 import { MapSelectionProvider } from "@/components/map-selection";
@@ -172,6 +174,14 @@ export default async function MapPage() {
       },
     }));
 
+  // The owner's Annual lives on their public route, so it's only linkable when
+  // their map is shared. Link the most recent year that has dated rounds.
+  const latestAnnual = availableYears(entries)[0] ?? null;
+  const annualHref =
+    profileData?.isShared && profileData.shareSlug && latestAnnual
+      ? `/u/${profileData.shareSlug}/${latestAnnual}`
+      : null;
+
   return (
     <div className="flex flex-1 flex-col">
       {/* Top bar */}
@@ -219,6 +229,24 @@ export default async function MapPage() {
               </h2>
               {entries.length > 0 && (
                 <ClubhouseStats stats={computeStats(entries)} />
+              )}
+              {annualHref && (
+                <Link
+                  href={annualHref}
+                  className="group flex items-center justify-between rounded-md border border-[var(--line)] bg-[var(--surface)] px-4 py-3 transition-colors hover:border-[var(--brass)]"
+                >
+                  <span className="flex flex-col">
+                    <span className="font-[family-name:var(--font-mono)] text-[0.65rem] uppercase tracking-[0.14em] text-[var(--brass-deep)]">
+                      The Annual
+                    </span>
+                    <span className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-[var(--ink)]">
+                      {latestAnnual} in golf
+                    </span>
+                  </span>
+                  <span className="font-[family-name:var(--font-mono)] text-sm text-[var(--ink-muted)] transition-transform group-hover:translate-x-0.5">
+                    →
+                  </span>
+                </Link>
               )}
               <CourseList entries={entries} />
             </div>
