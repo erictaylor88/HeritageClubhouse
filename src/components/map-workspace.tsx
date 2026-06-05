@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { useMapSelection } from "@/components/map-selection";
 
 type View = "map" | "logbook";
 
@@ -21,6 +22,14 @@ export function MapWorkspace({
   map: React.ReactNode;
 }) {
   const [view, setView] = useState<View>("map");
+
+  // When a logbook row asks to be shown on the map (mobile), surface the map
+  // pane. Subscribe so the switch happens in the focus callback, not in render.
+  const { subscribeFocus } = useMapSelection();
+  useEffect(
+    () => subscribeFocus(() => setView("map")),
+    [subscribeFocus],
+  );
 
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] flex-col overflow-hidden md:flex-row">

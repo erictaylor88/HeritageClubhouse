@@ -1,10 +1,11 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import L from "leaflet";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import {
+  COURSE_STATUSES,
   STATUS_META,
   courseMonogram,
   courseTitle,
@@ -12,7 +13,17 @@ import {
   type CourseStatus,
 } from "@/lib/courses";
 import { type FriendOverlay } from "@/lib/follow";
-import { StatusChip } from "@/components/status-chip";
+import { StatusChip, StatusSwatch } from "@/components/status-chip";
+import { useMapSelection } from "@/components/map-selection";
+
+/** Whether the user has asked the OS to minimize motion. */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
 
 // Eric is in Irvine, CA — default the empty-map view over Orange County / SoCal.
 const DEFAULT_CENTER: [number, number] = [33.6846, -117.8265];
@@ -96,6 +107,42 @@ function FitToEntries({ entries }: { entries: CourseEntry[] }) {
   return null;
 }
 
+/**
+ * Flies the map to the focused course's pin and opens its popup, in response to
+ * a logbook row click (driven by `focusTick` from the selection context, so a
+ * repeat click on the same row re-flies). Honors prefers-reduced-motion by
+ * jumping instead of animating.
+ */
+function FocusController({
+  entries,
+  selectedCourseId,
+  focusTick,
+  markerRefs,
+}: {
+  entries: CourseEntry[];
+  selectedCourseId: string | null;
+  focusTick: number;
+  markerRefs: RefObject<Map<string, L.Marker>>;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    if (focusTick === 0 || !selectedCourseId) return;
+    const entry = entries.find((e) => e.course.courseId === selectedCourseId);
+    if (!entry) return;
+    const target: [number, number] = [entry.course.lat, entry.course.lng];
+    const zoom = Math.max(map.getZoom(), 13);
+    if (prefersReducedMotion()) {
+      map.setView(target, zoom, { animate: false });
+    } else {
+      map.flyTo(target, zoom, { duration: 0.75 });
+    }
+    markerRefs.current.get(selectedCourseId)?.openPopup();
+    // Intentionally fire only on focus requests, not on every selection change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusTick]);
+  return null;
+}
+
 export function CourseMap({
   entries,
   friends = [],
@@ -103,10 +150,23 @@ export function CourseMap({
   entries: CourseEntry[];
   friends?: FriendOverlay[];
 }) {
+  const { selectedCourseId, focusTick, selectCourse } = useMapSelection();
+  // Live marker handles by course_id, so the FocusController can open popups.
+  const markerRefs = useRef<Map<string, L.Marker>>(new Map());
+
   // Which friends' overlays are currently shown. Overlay is opt-in — starts off.
   // Reads always intersect with the current `friends`, so a stale id (after an
   // unfollow) is harmless and needs no pruning effect.
   const [visibleFriends, setVisibleFriends] = useState<Set<string>>(new Set());
+
+  // Status layer filter — all on by default. Toggling hides that status's pins.
+  const [activeStatuses, setActiveStatuses] = useState<Set<CourseStatus>>(
+    () => new Set(COURSE_STATUSES),
+  );
+  const visibleEntries = useMemo(
+    () => entries.filter((e) => activeStatuses.has(e.status)),
+    [entries, activeStatuses],
+  );
 
   // One stamp icon per entry — the monogram varies, so memoize on the inputs
   // that actually change the rendered badge.
@@ -150,13 +210,20 @@ export function CourseMap({
         className="h-full w-full"
       >
         <TileLayer url={STADIA_TILE_URL} attribution={STADIA_ATTRIBUTION} />
-        {entries.map((entry) => {
+        {visibleEntries.map((entry) => {
           const meta = STATUS_META[entry.status];
           return (
             <Marker
               key={entry.id}
               position={[entry.course.lat, entry.course.lng]}
               icon={icons.get(entry.id)}
+              ref={(m) => {
+                if (m) markerRefs.current.set(entry.course.courseId, m);
+                else markerRefs.current.delete(entry.course.courseId);
+              }}
+              eventHandlers={{
+                click: () => selectCourse(entry.course.courseId),
+              }}
             >
               <Popup>
                 {/* Top-edge status-color rule (design spec §8.2). */}
@@ -218,6 +285,12 @@ export function CourseMap({
           )}
 
         <FitToEntries entries={entries} />
+        <FocusController
+          entries={entries}
+          selectedCourseId={selectedCourseId}
+          focusTick={focusTick}
+          markerRefs={markerRefs}
+        />
       </MapContainer>
 
       {/* Empty-state hint: a gentle floating note over the default view when
@@ -229,6 +302,21 @@ export function CourseMap({
             Add a course to drop your first stamp here
           </p>
         </div>
+      )}
+
+      {entries.length > 0 && (
+        <StatusFilterControl
+          entries={entries}
+          active={activeStatuses}
+          onToggle={(status) =>
+            setActiveStatuses((prev) => {
+              const next = new Set(prev);
+              if (next.has(status)) next.delete(status);
+              else next.add(status);
+              return next;
+            })
+          }
+        />
       )}
 
       {friends.length > 0 && (
@@ -247,6 +335,50 @@ export function CourseMap({
           onHideAll={() => setVisibleFriends(new Set())}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * Status layer filter: toggle played / upcoming / bucket-list pins on the map.
+ * Sits top-left as a small always-open panel (only three rows). A status with
+ * no courses is omitted; toggling one off dims its row and hides its pins.
+ */
+function StatusFilterControl({
+  entries,
+  active,
+  onToggle,
+}: {
+  entries: CourseEntry[];
+  active: Set<CourseStatus>;
+  onToggle: (status: CourseStatus) => void;
+}) {
+  return (
+    <div className="absolute left-3 top-3 z-[1000] flex flex-col gap-0.5 rounded-md border border-[var(--line)] bg-[var(--surface)] p-1.5 shadow-[var(--shadow-md)]">
+      {COURSE_STATUSES.map((status) => {
+        const count = entries.filter((e) => e.status === status).length;
+        if (count === 0) return null;
+        const on = active.has(status);
+        return (
+          <button
+            key={status}
+            type="button"
+            onClick={() => onToggle(status)}
+            aria-pressed={on}
+            className={`flex items-center gap-2 rounded px-2 py-1 text-left transition-opacity hover:bg-[var(--paper-sunk)] ${
+              on ? "opacity-100" : "opacity-40"
+            }`}
+          >
+            <StatusSwatch status={status} />
+            <span className="text-xs text-[var(--ink)]">
+              {STATUS_META[status].label}
+            </span>
+            <span className="font-[family-name:var(--font-mono)] text-[0.7rem] text-[var(--ink-muted)]">
+              {count}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

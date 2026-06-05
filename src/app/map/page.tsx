@@ -7,6 +7,7 @@ import { ClubhouseStats } from "@/components/clubhouse-stats";
 import { computeStats } from "@/lib/stats";
 import { MapCanvas } from "@/components/map-canvas";
 import { MapWorkspace } from "@/components/map-workspace";
+import { MapSelectionProvider } from "@/components/map-selection";
 import { ProfileBar } from "@/components/profile-bar";
 import { FriendsBar } from "@/components/friends-bar";
 import { type CourseEntry, type CourseStatus } from "@/lib/courses";
@@ -188,6 +189,7 @@ export default async function MapPage() {
         </form>
       </header>
 
+      <MapSelectionProvider>
       <MapWorkspace
         panel={
           <>
@@ -236,6 +238,7 @@ export default async function MapPage() {
         }
         map={<MapCanvas entries={entries} friends={friendOverlays} />}
       />
+      </MapSelectionProvider>
     </div>
   );
 }

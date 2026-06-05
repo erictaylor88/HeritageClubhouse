@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { removeCourseEntry, updateCourseEntry } from "@/app/map/actions";
+import { useMapSelection } from "@/components/map-selection";
 import {
   COURSE_STATUSES,
   STATUS_META,
@@ -53,9 +54,24 @@ export function CourseList({ entries }: { entries: CourseEntry[] }) {
 
 function EntryItem({ entry }: { entry: CourseEntry }) {
   const router = useRouter();
+  const { selectedCourseId, focusCourse } = useMapSelection();
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
+
+  // Highlight + scroll into view when this course is selected on the map.
+  const selected = selectedCourseId === entry.course.courseId;
+  const liRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (!selected) return;
+    const reduce = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    liRef.current?.scrollIntoView({
+      block: "nearest",
+      behavior: reduce ? "auto" : "smooth",
+    });
+  }, [selected]);
 
   // Edit-form state (strings for controlled inputs).
   const [datePlayed, setDatePlayed] = useState(entry.datePlayed ?? "");
@@ -108,7 +124,14 @@ function EntryItem({ entry }: { entry: CourseEntry }) {
   }
 
   return (
-    <li className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2">
+    <li
+      ref={liRef}
+      className={`rounded-md border bg-[var(--surface)] px-3 py-2 transition-colors ${
+        selected
+          ? "border-[var(--brass)] ring-1 ring-[var(--brass)]"
+          : "border-[var(--line)]"
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <Link
@@ -124,6 +147,14 @@ function EntryItem({ entry }: { entry: CourseEntry }) {
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2 text-xs">
+          <button
+            type="button"
+            onClick={() => focusCourse(entry.course.courseId)}
+            className="text-[var(--ink-muted)] underline-offset-2 hover:text-[var(--brass-deep)] hover:underline"
+            aria-label={`Show ${courseTitle(entry.course)} on the map`}
+          >
+            Map
+          </button>
           <button
             type="button"
             onClick={() => (editing ? setEditing(false) : startEdit())}
