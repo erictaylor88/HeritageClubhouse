@@ -90,14 +90,14 @@ export default function LoginPage() {
 
               <form onSubmit={handleVerifyCode} className="flex flex-col gap-3">
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="code">Or enter the 6-digit code</Label>
+                  <Label htmlFor="code">Or enter the code from your email</Label>
                   <Input
                     id="code"
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     pattern="[0-9]*"
-                    maxLength={6}
-                    placeholder="123456"
+                    maxLength={10}
+                    placeholder="Code"
                     value={code}
                     onChange={(e) =>
                       setCode(e.target.value.replace(/\D/g, ""))
