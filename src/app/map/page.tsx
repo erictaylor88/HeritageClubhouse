@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { CourseSearch } from "@/components/course-search";
 import { CourseList } from "@/components/course-list";
+import { ClubhouseStats } from "@/components/clubhouse-stats";
+import { computeStats } from "@/lib/stats";
 import { MapCanvas } from "@/components/map-canvas";
 import { MapWorkspace } from "@/components/map-workspace";
 import { ProfileBar } from "@/components/profile-bar";
@@ -213,6 +215,9 @@ export default async function MapPage() {
                   </span>
                 )}
               </h2>
+              {entries.length > 0 && (
+                <ClubhouseStats stats={computeStats(entries)} />
+              )}
               <CourseList entries={entries} />
             </div>
 

@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MapCanvas } from "@/components/map-canvas";
 import { PublicCourseList } from "@/components/public-course-list";
+import { ClubhouseStats } from "@/components/clubhouse-stats";
+import { computeStats } from "@/lib/stats";
 import { type CourseEntry, type CourseStatus } from "@/lib/courses";
 
 // Always re-query so the share gate reflects the live `is_shared` flag — a map
@@ -155,6 +157,8 @@ export default async function PublicMapPage({
               {name}&apos;s Clubhouse
             </h1>
           </div>
+
+          <ClubhouseStats stats={computeStats(entries)} />
 
           <div className="flex flex-col gap-3">
             <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-[var(--forest)]">
