@@ -5,12 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   addRound,
+  moveRound,
   removeCourseEntry,
   removeRound,
   updateCourseEntry,
   updateRound,
-  type RoundFields,
 } from "@/app/map/actions";
+import { type RoundFields } from "@/lib/rounds";
 import { useMapSelection } from "@/components/map-selection";
 import {
   COURSE_STATUSES,
@@ -26,7 +27,16 @@ import {
 } from "@/lib/courses";
 import { StatusSwatch } from "@/components/status-chip";
 
+/** A course a round can be moved onto: the user's other played entries. */
+export type MoveTarget = { entryId: string; title: string };
+
 export function CourseList({ entries }: { entries: CourseEntry[] }) {
+  // Played courses are the valid destinations for moving a round (rounds belong
+  // to courses you've played). Built once and passed down to each round row.
+  const moveTargets: MoveTarget[] = entries
+    .filter((e) => e.status === "played")
+    .map((e) => ({ entryId: e.id, title: courseTitle(e.course) }));
+
   if (entries.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-center">
@@ -54,7 +64,11 @@ export function CourseList({ entries }: { entries: CourseEntry[] }) {
             </h3>
             <ul className="flex flex-col gap-1.5">
               {group.map((entry) => (
-                <EntryItem key={entry.id} entry={entry} />
+                <EntryItem
+                  key={entry.id}
+                  entry={entry}
+                  moveTargets={moveTargets}
+                />
               ))}
             </ul>
           </section>
@@ -64,7 +78,13 @@ export function CourseList({ entries }: { entries: CourseEntry[] }) {
   );
 }
 
-function EntryItem({ entry }: { entry: CourseEntry }) {
+function EntryItem({
+  entry,
+  moveTargets,
+}: {
+  entry: CourseEntry;
+  moveTargets: MoveTarget[];
+}) {
   const router = useRouter();
   const { selectedCourseId, focusCourse } = useMapSelection();
   const [pending, startTransition] = useTransition();
@@ -186,6 +206,7 @@ function EntryItem({ entry }: { entry: CourseEntry }) {
             <RoundsManager
               entryId={entry.id}
               rounds={rounds}
+              moveTargets={moveTargets.filter((t) => t.entryId !== entry.id)}
               onChanged={() => router.refresh()}
             />
           )}
@@ -205,10 +226,12 @@ function EntryItem({ entry }: { entry: CourseEntry }) {
 function RoundsManager({
   entryId,
   rounds,
+  moveTargets,
   onChanged,
 }: {
   entryId: string;
   rounds: Round[];
+  moveTargets: MoveTarget[];
   onChanged: () => void;
 }) {
   const [adding, setAdding] = useState(false);
@@ -256,7 +279,12 @@ function RoundsManager({
 
       <ul className="flex flex-col gap-1.5">
         {rounds.map((round) => (
-          <RoundRow key={round.id} round={round} onChanged={onChanged} />
+          <RoundRow
+            key={round.id}
+            round={round}
+            moveTargets={moveTargets}
+            onChanged={onChanged}
+          />
         ))}
       </ul>
 
@@ -278,12 +306,15 @@ function RoundsManager({
 /** One round: a compact view row that flips into an edit form. */
 function RoundRow({
   round,
+  moveTargets,
   onChanged,
 }: {
   round: Round;
+  moveTargets: MoveTarget[];
   onChanged: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [moving, setMoving] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
 
@@ -296,6 +327,19 @@ function RoundRow({
         return;
       }
       setEditing(false);
+      onChanged();
+    });
+  }
+
+  function handleMove(targetEntryId: string) {
+    setError("");
+    startTransition(async () => {
+      const result = await moveRound(round.id, targetEntryId);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setMoving(false);
       onChanged();
     });
   }
@@ -329,43 +373,86 @@ function RoundRow({
 
   const hasMeta = round.datePlayed || round.score !== null;
   return (
-    <li className="flex items-start justify-between gap-3 rounded-md border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1.5">
-      <div className="min-w-0">
-        <p className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.06em] text-[var(--ink)] tabular-nums">
-          {round.datePlayed ? formatDatePlayed(round.datePlayed) : "Undated"}
-          {round.score !== null && (
-            <span className="text-[var(--ink-muted)]"> · {round.score}</span>
-          )}
-          {!hasMeta && <span className="text-[var(--ink-muted)]"> round</span>}
-        </p>
-        {round.notes && (
-          <p className="mt-0.5 truncate text-xs italic text-[var(--ink-muted)]">
-            {round.notes}
+    <li className="rounded-md border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.06em] text-[var(--ink)] tabular-nums">
+            {round.datePlayed ? formatDatePlayed(round.datePlayed) : "Undated"}
+            {round.score !== null && (
+              <span className="text-[var(--ink-muted)]"> · {round.score}</span>
+            )}
+            {!hasMeta && <span className="text-[var(--ink-muted)]"> round</span>}
           </p>
-        )}
+          {round.notes && (
+            <p className="mt-0.5 truncate text-xs italic text-[var(--ink-muted)]">
+              {round.notes}
+            </p>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2 text-[0.7rem]">
+          {moveTargets.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setError("");
+                setMoving((v) => !v);
+              }}
+              disabled={pending}
+              className="text-[var(--ink-muted)] underline-offset-2 hover:text-[var(--brass-deep)] hover:underline disabled:opacity-50"
+              aria-label="Move round to another course"
+            >
+              {moving ? "Cancel" : "Move"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setError("");
+              setEditing(true);
+            }}
+            disabled={pending}
+            className="text-[var(--ink-muted)] underline-offset-2 hover:text-[var(--brass-deep)] hover:underline disabled:opacity-50"
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={handleRemove}
+            disabled={pending}
+            className="text-[var(--ink-muted)] underline-offset-2 hover:text-[var(--oxblood)] hover:underline disabled:opacity-50"
+            aria-label="Remove round"
+          >
+            {pending ? "…" : "Remove"}
+          </button>
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2 text-[0.7rem]">
-        <button
-          type="button"
-          onClick={() => {
-            setError("");
-            setEditing(true);
-          }}
-          disabled={pending}
-          className="text-[var(--ink-muted)] underline-offset-2 hover:text-[var(--brass-deep)] hover:underline disabled:opacity-50"
-        >
-          Edit
-        </button>
-        <button
-          type="button"
-          onClick={handleRemove}
-          disabled={pending}
-          className="text-[var(--ink-muted)] underline-offset-2 hover:text-[var(--oxblood)] hover:underline disabled:opacity-50"
-          aria-label="Remove round"
-        >
-          {pending ? "…" : "Remove"}
-        </button>
-      </div>
+
+      {/* Move picker: reassign this round to another of your played courses. */}
+      {moving && (
+        <div className="mt-2 border-t border-[var(--line)] pt-2">
+          <p className="mb-1 font-[family-name:var(--font-mono)] text-[0.65rem] uppercase tracking-[0.12em] text-[var(--ink-muted)]">
+            Move this round to
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {moveTargets.map((t) => (
+              <button
+                key={t.entryId}
+                type="button"
+                onClick={() => handleMove(t.entryId)}
+                disabled={pending}
+                className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs text-[var(--ink)] transition-colors hover:border-[var(--brass)] hover:bg-[var(--paper-sunk)] disabled:opacity-50"
+              >
+                {t.title}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[0.7rem] text-[var(--ink-muted)]">
+            Don&apos;t see it? Add the course with the search above first.
+          </p>
+        </div>
+      )}
+
+      {error && <p className="mt-1.5 text-xs text-[var(--oxblood)]">{error}</p>}
     </li>
   );
 }

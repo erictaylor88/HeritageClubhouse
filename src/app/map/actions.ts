@@ -9,6 +9,11 @@ import {
   type CourseSearchResult,
   type CourseStatus,
 } from "@/lib/courses";
+import {
+  sanitizeNotes,
+  sanitizeRoundFields,
+  type RoundFields,
+} from "@/lib/rounds";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -92,8 +97,6 @@ export async function addCourseEntry(
  * score now live on rounds; the entry note is a course-level remark. RLS
  * enforces ownership; the explicit `user_id` filter is defense-in-depth.
  */
-const MAX_NOTES = 2000;
-
 export async function updateCourseEntry(
   entryId: string,
   notes: string | null,
@@ -142,59 +145,8 @@ export async function removeCourseEntry(entryId: string): Promise<ActionResult> 
 
 // ---------------------------------------------------------------------------
 // Rounds — individual plays of a course (the detail half of the split).
+// Field validation lives in lib/rounds (shared with the importer).
 // ---------------------------------------------------------------------------
-
-/** Editable per-round fields. */
-export type RoundFields = {
-  datePlayed: string | null;
-  score: number | null;
-  notes: string | null;
-};
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-function sanitizeNotes(
-  notes: string | null,
-): { ok: true; value: string | null } | { ok: false; error: string } {
-  if (typeof notes !== "string") return { ok: true, value: null };
-  const trimmed = notes.trim();
-  if (trimmed.length > MAX_NOTES)
-    return { ok: false, error: `Notes must be ${MAX_NOTES} characters or fewer.` };
-  return { ok: true, value: trimmed.length > 0 ? trimmed : null };
-}
-
-/** Normalize + validate a round's fields, or return an error string. */
-function sanitizeRoundFields(
-  fields: RoundFields,
-): { ok: true; value: RoundFields } | { ok: false; error: string } {
-  // Date played: null, or a real YYYY-MM-DD that isn't in the future.
-  let datePlayed: string | null = null;
-  if (fields.datePlayed) {
-    const raw = fields.datePlayed.trim();
-    if (!ISO_DATE.test(raw)) return { ok: false, error: "Invalid date." };
-    const parsed = new Date(`${raw}T00:00:00Z`);
-    if (Number.isNaN(parsed.getTime()))
-      return { ok: false, error: "Invalid date." };
-    const todayUtc = new Date().toISOString().slice(0, 10);
-    if (raw > todayUtc)
-      return { ok: false, error: "Date played can't be in the future." };
-    datePlayed = raw;
-  }
-
-  // Score: null, or an integer in a sane golf range.
-  let score: number | null = null;
-  if (fields.score !== null && fields.score !== undefined) {
-    const n = Number(fields.score);
-    if (!Number.isInteger(n) || n < 1 || n > 300)
-      return { ok: false, error: "Score must be a whole number (1–300)." };
-    score = n;
-  }
-
-  const notes = sanitizeNotes(fields.notes);
-  if (!notes.ok) return notes;
-
-  return { ok: true, value: { datePlayed, score, notes: notes.value } };
-}
 
 /**
  * Add a round to one of the signed-in user's course entries. We look the entry
@@ -259,6 +211,45 @@ export async function updateRound(
   const { error } = await supabase
     .from("rounds")
     .update({ date_played: datePlayed, score, notes })
+    .eq("id", roundId)
+    .eq("user_id", user.id); // defense-in-depth; RLS already enforces ownership
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/map");
+  return { ok: true };
+}
+
+/**
+ * Move one of the signed-in user's rounds to a different course (entry) of their
+ * own. The denormalized `course_id` is re-sourced from the target entry so it
+ * stays consistent with the new parent (the same invariant the insert policy
+ * enforces). Used to split rounds that 18Birdies grouped under one multi-course
+ * club (e.g. PGA West) onto the specific course actually played.
+ */
+export async function moveRound(
+  roundId: string,
+  targetEntryId: string,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "You're not signed in." };
+  if (!roundId || !targetEntryId) return { ok: false, error: "Missing round or target." };
+
+  // Source course_id from the target entry, verifying the user owns it.
+  const { data: target, error: lookupError } = await supabase
+    .from("course_entries")
+    .select("course_id")
+    .eq("id", targetEntryId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (lookupError) return { ok: false, error: lookupError.message };
+  if (!target) return { ok: false, error: "Target course not found." };
+
+  const { error } = await supabase
+    .from("rounds")
+    .update({ entry_id: targetEntryId, course_id: target.course_id })
     .eq("id", roundId)
     .eq("user_id", user.id); // defense-in-depth; RLS already enforces ownership
   if (error) return { ok: false, error: error.message };

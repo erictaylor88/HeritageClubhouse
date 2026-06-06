@@ -186,6 +186,13 @@ export default async function MapPage() {
 
             <CourseSearch />
 
+            <Link
+              href="/import"
+              className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.14em] text-[var(--ink-muted)] underline-offset-2 transition-colors hover:text-[var(--forest)] hover:underline"
+            >
+              Import rounds from 18Birdies →
+            </Link>
+
             <div className="flex flex-col gap-3 border-t border-[var(--line)] pt-5">
               <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-[var(--forest)]">
                 Your courses

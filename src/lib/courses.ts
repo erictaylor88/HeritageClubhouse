@@ -199,6 +199,31 @@ export function cleanCourseName(raw: string): string {
     .join(" ");
 }
 
+/**
+ * Generic course-name words that carry no identifying signal — dropped before
+ * token matching so "Black Gold Golf Club" and "Black Gold" align, and
+ * "Recreation Park Golf Course" matches a cached "Recreation Park".
+ */
+const MATCH_STOPWORDS = new Set([
+  "golf", "club", "course", "country", "links", "resort", "municipal",
+  "complex", "the", "at", "of", "and", "park", "gc", "cc", "gl",
+]);
+
+/**
+ * Significant lowercase tokens of a course name, used for fuzzy matching an
+ * imported source name against `course_cache`. Strips punctuation + the generic
+ * golf-vocabulary stopwords above, leaving the identifying words.
+ */
+export function courseMatchTokens(name: string): Set<string> {
+  return new Set(
+    cleanCourseName(name)
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 0 && !MATCH_STOPWORDS.has(w)),
+  );
+}
+
 /** A human label for a course, falling back gracefully across the name fields. */
 export function courseTitle(course: {
   clubName: string | null;
