@@ -7,7 +7,7 @@ import {
   type CachedCourseWithRaw,
 } from "@/lib/golf/cache";
 import { GolfApiError, GolfApiRateLimitError } from "@/lib/golf/api";
-import { parseScorecard } from "@/lib/golf/scorecard";
+import { hardestHole, parseScorecard } from "@/lib/golf/scorecard";
 import {
   courseTitle,
   formatDatePlayed,
@@ -69,6 +69,7 @@ export default async function CourseScorecardPage({
     .maybeSingle();
 
   const scorecard = parseScorecard(course.raw);
+  const toughHole = hardestHole(course.raw);
   const title = courseTitle({
     clubName: course.club_name,
     courseName: course.course_name,
@@ -156,9 +157,20 @@ export default async function CourseScorecardPage({
 
         {/* Scorecard */}
         <section className="mt-8 flex flex-col gap-4 border-t border-[var(--line)] pt-6">
-          <h2 className="font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight text-[var(--forest)]">
-            Scorecard
-          </h2>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 className="font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight text-[var(--forest)]">
+              Scorecard
+            </h2>
+            {toughHole && (
+              <p className="font-[family-name:var(--font-mono)] text-[0.7rem] uppercase tracking-[0.1em] text-[var(--ink-muted)]">
+                Hardest hole · No. {toughHole.number}
+                {toughHole.par !== null && <span> · par {toughHole.par}</span>}
+                {toughHole.yardage !== null && (
+                  <span> · {toughHole.yardage} yds</span>
+                )}
+              </p>
+            )}
+          </div>
 
           {scorecard ? (
             <Scorecard tees={scorecard.tees} />

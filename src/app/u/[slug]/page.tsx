@@ -6,7 +6,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { MapCanvas } from "@/components/map-canvas";
 import { PublicCourseList } from "@/components/public-course-list";
 import { ClubhouseStats } from "@/components/clubhouse-stats";
+import { EnrichedStats } from "@/components/enriched-stats";
 import { computeStats } from "@/lib/stats";
+import { loadEnrichedStats } from "@/lib/enriched-load";
 import { availableYears } from "@/lib/annual";
 import {
   rowToCourseEntry,
@@ -98,6 +100,7 @@ export default async function PublicMapPage({
     .map(rowToCourseEntry)
     .filter((e): e is CourseEntry => e !== null);
 
+  const enriched = await loadEnrichedStats(admin, entries);
   const name = profile.display_name?.trim() || profile.username;
   const latestAnnual = availableYears(entries)[0] ?? null;
 
@@ -135,6 +138,8 @@ export default async function PublicMapPage({
           </div>
 
           <ClubhouseStats stats={computeStats(entries)} />
+
+          <EnrichedStats stats={enriched} />
 
           {latestAnnual && (
             <Link

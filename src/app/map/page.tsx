@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { CourseSearch } from "@/components/course-search";
 import { CourseList } from "@/components/course-list";
 import { ClubhouseStats } from "@/components/clubhouse-stats";
+import { EnrichedStats } from "@/components/enriched-stats";
 import { computeStats } from "@/lib/stats";
+import { loadEnrichedStats } from "@/lib/enriched-load";
 import { availableYears } from "@/lib/annual";
 import { MapCanvas } from "@/components/map-canvas";
 import { MapWorkspace } from "@/components/map-workspace";
@@ -137,6 +139,9 @@ export default async function MapPage() {
     .map(rowToCourseEntry)
     .filter((e): e is CourseEntry => e !== null);
 
+  // Enriched "on the card" stats over played courses that have scorecard data.
+  const enriched = await loadEnrichedStats(supabase, entries);
+
   // The owner's Annual lives on their public route, so it's only linkable when
   // their map is shared. Link the most recent year that has dated rounds.
   const latestAnnual = availableYears(entries)[0] ?? null;
@@ -193,6 +198,7 @@ export default async function MapPage() {
               {entries.length > 0 && (
                 <ClubhouseStats stats={computeStats(entries)} />
               )}
+              <EnrichedStats stats={enriched} />
               {annualHref && (
                 <Link
                   href={annualHref}

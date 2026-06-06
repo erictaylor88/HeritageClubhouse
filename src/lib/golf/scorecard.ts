@@ -115,6 +115,50 @@ export function parseScorecard(raw: unknown): Scorecard | null {
   return tees.length > 0 ? { tees } : null;
 }
 
+/** Headline figures for a course's "primary" (championship) tee. */
+export type PrimaryTeeSummary = {
+  teeName: string;
+  courseRating: number | null;
+  slopeRating: number | null;
+  totalYards: number | null;
+  parTotal: number | null;
+};
+
+/**
+ * Summarize a cached `raw` payload as its championship tee's headline numbers,
+ * or null if the course has no usable scorecard yet (not enriched / no tees).
+ * Drives the enriched profile stats — slope, rating, yardage per course.
+ */
+export function primaryTeeSummary(raw: unknown): PrimaryTeeSummary | null {
+  const scorecard = parseScorecard(raw);
+  if (!scorecard) return null;
+  const tee = scorecard.tees[defaultTeeIndex(scorecard.tees)];
+  if (!tee) return null;
+  // total_yards is usually present; fall back to summing holes when it isn't.
+  const summedYards = tee.holes.reduce((acc, h) => acc + (h.yardage ?? 0), 0);
+  return {
+    teeName: tee.teeName,
+    courseRating: tee.courseRating,
+    slopeRating: tee.slopeRating,
+    totalYards: tee.totalYards ?? (summedYards > 0 ? summedYards : null),
+    parTotal: tee.parTotal,
+  };
+}
+
+/** The #1 stroke-index hole (handicap === 1) on the primary tee, or null. */
+export function hardestHole(
+  raw: unknown,
+): { number: number; par: number | null; yardage: number | null } | null {
+  const scorecard = parseScorecard(raw);
+  if (!scorecard) return null;
+  const tee = scorecard.tees[defaultTeeIndex(scorecard.tees)];
+  if (!tee) return null;
+  const hole = tee.holes.find((h) => h.handicap === 1);
+  return hole
+    ? { number: hole.number, par: hole.par, yardage: hole.yardage }
+    : null;
+}
+
 /**
  * Index of the "primary" tee to show by default: the longest (championship)
  * tee, preferring men's on a tie. Returns 0 for a single/empty list.
